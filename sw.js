@@ -1,6 +1,6 @@
 /* 数学宇宙 sw.js（build_math.py 产·P16 件二）：壳与数据各自按内容哈希独立缓存
    —— 改壳不重下数据、改数据不重下壳。cache-first + 后台更新 + 导航兜底 index.html。 */
-var V="m-shell-bc5bd272", DATA="m-data-089c4924";
+var V="m-shell-bc5bd272", DATA="m-data-2e914951";
 var PRE=["./", "./index.html", "./sync_cfg.js", "./manifest.json", "./icon-512.png", "./icon-192.png", "./icon-180.png"], PRED=["./math_data.js"];
 self.addEventListener("install",function(e){
   e.waitUntil(Promise.all([
