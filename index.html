@@ -784,7 +784,8 @@ html.lockdoc body{overflow:hidden}
   .mapv{grid-template-columns:minmax(0,1fr);gap:.3rem}
   .mappan{position:sticky;top:auto;bottom:0;border:none;border-top:1px solid var(--line);
     border-radius:0;min-height:5rem;background:var(--paper);
-    padding:.55rem .2rem calc(1.9rem + var(--sab))}
+    padding:.55rem .2rem calc(1.9rem + var(--sab));
+    max-height:42vh;overflow-y:auto;overscroll-behavior:contain}   /* 极端字号下面板不吞屏（fz2.4 实测 427px），超出自己内滚 */
 }
 
 /* ————— P16 件七 A · iPad（触屏且 ≥901px：iPad Pro 12.9 竖 1024 / 横 1366，含分屏 981）—————
@@ -2649,6 +2650,11 @@ function bmOfLevel(lid){ /* 关 id → 挂着它的章图（扫 at 而非信 l.c
   for(i=0;i<chs.length;i++)if(bmNodesAt(chs[i],lid).length)return chs[i];
   return null;
 }
+function bmDefaultCh(){ /* 缺省章＝「当前章」（上次在学那一关所属章，其图在库才算），否则第一章 */
+  var lk=S&&S.meta&&S.meta.lastk,l=(lk&&byId[lk.k])||null;
+  if(l&&bmChapter(l.chapter))return l.chapter;
+  return "";
+}
 /* ————— 结构闸（selftest ⑳ 与 verify_content_math.py 同口径；空图合法＝内容未到不拦）————— */
 function bmCheck(where,ch){
   if(!ch||typeof ch!=="object"||Array.isArray(ch))return where+" 非对象";
@@ -2979,7 +2985,7 @@ function mapWire(){
 }
 function mapPage(){showPage(mapHtml());document.body.classList.add("mapw");mapFill();}
 function openMap(chid,hl){
-  MAPV={ch:chid||"",sel:null,edge:null,hl:hl||null,bk:hl?"关":"墙"};
+  MAPV={ch:chid||bmDefaultCh(),sel:null,edge:null,hl:hl||null,bk:hl?"关":"墙"};
   goPage({v:"page",p:"map",ch:MAPV.ch,hl:MAPV.hl,bk:MAPV.bk},mapPage);
 }
 /* ————— 小地图：关内一阶子图（上游左／本关中／下游右）————— */
@@ -3838,7 +3844,19 @@ function selftest(){
       for(i=0;i<sub.up.length;i++)if(isM[sub.up[i].id])return "up 混入本关件";
       for(i=0;i<sub.dn.length;i++)if(isM[sub.dn[i].id])return "dn 混入本关件";
     }
-    /* ⑤ 缺件降级不炸：不存在的章/关、空图一律优雅缺席 */
+    /* ⑤ 缺省章＝当前章（lastk 所属章其图在库时）／否则第一章 */
+    var bakLk=S.meta.lastk;
+    S.meta.lastk=null;
+    if(bmDefaultCh()!=="")return "无 lastk 未落第一章";
+    if(lid){
+      S.meta.lastk={k:lid,ts:1};
+      var wantCh=(byId[lid]||{}).chapter;
+      if(bmChapter(wantCh)&&bmDefaultCh()!==wantCh)return "有 lastk 未落当前章";
+    }
+    S.meta.lastk={k:"__nope",ts:1};
+    if(bmDefaultCh()!=="")return "坏 lastk 未落第一章";
+    S.meta.lastk=bakLk;
+    /* ⑥ 缺件降级不炸：不存在的章/关、空图一律优雅缺席 */
     if(bmChapter("__nope")!==null)return "不存在的章未返 null";
     if(bmSub("__nope")!==null)return "无数据关子图未返 null";
     var noL=LEVELS.find(function(x){return x.teach&&!bmSub(x.id);});
@@ -3854,7 +3872,7 @@ function selftest(){
     }catch(ex){dm=ex.message;}
     M.buildmap=bakBM;
     if(dm)return dm;
-    /* ⑥ 投影律：选中/悬读纯内存，存档字节零增 */
+    /* ⑦ 投影律：选中/悬读纯内存，存档字节零增 */
     var bk9=localStorage.getItem(SAVE),bakSel=MAPV.sel,bakB=BSEL;
     MAPV.sel="__probe";BSEL="__probe";
     var af9=localStorage.getItem(SAVE);
@@ -4006,7 +4024,7 @@ function boot(){
     /* P18 句柄：文档锁 / 转屏锚 / 窄屏钳（自查与截图用；只读或与 UI 同路，不新开旁门） */
     docLock:docLock,topUnit:topUnit,rotSnap:rotSnap,rotRestore:rotRestore,mReclamp:mReclamp,
     /* P19 句柄：建构图（自查与截图用；只读或与 UI 同路，不新开旁门） */
-    bmBook:bmBook,bmChapter:bmChapter,bmCheck:bmCheck,bmLayers:bmLayers,bmLayout:bmLayout,
+    bmBook:bmBook,bmChapter:bmChapter,bmCheck:bmCheck,bmLayers:bmLayers,bmLayout:bmLayout,bmDefaultCh:bmDefaultCh,
     bmMapSvg:bmMapSvg,bmSub:bmSub,bmSubSvg:bmSubSvg,bmSaySub:bmSaySub,bmBlock:bmBlock,
     openMap:openMap,mapFill:mapFill,get MAPV(){return MAPV;},get BSEL(){return BSEL;},
     get rotSnapshot(){return RSNAP;},
