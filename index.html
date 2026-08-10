@@ -996,7 +996,7 @@ function loadState(){
   });
   /* P16 应用级指针迁移：坏件作废（此时尚无 byId 索引，关 id 是否在库留给路由时判） */
   if(S.meta.lastk&&(typeof S.meta.lastk!=="object"||Array.isArray(S.meta.lastk)
-     ||typeof S.meta.lastk.k!=="string"||!S.meta.lastk.k))S.meta.lastk=null;
+     ||typeof S.meta.lastk.k!=="string"))S.meta.lastk=null;
   /* ===== P16 事故勘误（PROGRESS AS 案）：剔除 2026-08-05 03:20UTC 测试误写云档的假记录，
      精确时戳匹配；2026-09 后可整段删除。 =====
      假记录已随同步进过各设备本地档，云端直删会被设备端按 max(hits[].t) 判新冲回，故治本＝壳内
@@ -1595,11 +1595,11 @@ function anchorSettle(a){
   try{if(window.ResizeObserver){ro=new ResizeObserver(run);ro.observe($("#rin"));setTimeout(stop,8200);}}catch(e){}
   try{if(document.fonts&&document.fonts.ready&&document.fonts.ready.then)document.fonts.ready.then(run);}catch(e){}
 }
-function lastkSet(id){ /* 开房写、关房清；坏关 id 不写 */
+function lastkSet(id){ /* 开房写、关房清（清=墓碑 {k:"",ts}，云端合并按 ts 对决·AU）；坏关 id 按清空处理 */
   if(noWrite())return;
-  var nv=(id&&byId[id])?{k:id,ts:now()}:null,ov=S.meta.lastk||null;
-  if(!nv&&!ov)return;
-  if(nv&&ov&&ov.k===nv.k)return;   /* 同关重入不重复写盘 */
+  var nv=(id&&byId[id])?{k:id,ts:now()}:{k:"",ts:now()},ov=S.meta.lastk||null;
+  if(nv&&ov&&ov.k===nv.k)return;   /* 同关重入/连续清空不重复写盘 */
+  if(!ov&&!nv.k)return;            /* 从未有过指针时的清空＝无信息量，不落盘 */
   S.meta.lastk=nv;save();
 }
 /* 冷启动路由（纯函数，selftest 可喂假 q/meta）：深链参数**绝对优先**，其次 lastk，再次墙。
@@ -4444,7 +4444,7 @@ boot();
   $$(".cells").forEach(mount);   /* boot 期已渲的章簇框补挂（后续 buildWall 各自补挂新簇框） */
 })();
 </script>
-<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @1377035fa8 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
+<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @358388c471 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
 <script src="sync_cfg.js"></script>
 <script>
 /* ============================================================================
@@ -4571,24 +4571,64 @@ function mWugeng(l,r){
     o.meta.che=che;})();
   return o;
 }
-function mathCaseT(S,id){var c=(S.cases||{})[id];if(!c)return 0;var t=0;
-  (c.hits||[]).forEach(function(h){if(h&&h.t>t)t=h.t;});
-  return t||((c.seen||c.due)?1:0);}
+function mT(x){return (typeof x==="number"&&isFinite(x))?x:0;}
+function hitsT(c){var t=0;((c&&c.hits)||[]).forEach(function(h){if(h&&mT(h.t)>t)t=mT(h.t);});
+  return t||((c&&(c.seen||c.due))?1:0);}
+function mathCaseT(S,id){ /* v2：末次活动=判题/阅读/微测/真题四者最晚（纯阅读也算活动，治平票字典序回滚拍位·R2） */
+  var c=(S.cases||{})[id];if(!c)return 0;
+  var t=hitsT(c),k;
+  if(c.pos&&mT(c.pos.ts)>t)t=mT(c.pos.ts);
+  var m=c.mc||{};for(k in m){if(badKey(m,k))continue;if(m[k]&&mT(m[k].t)>t)t=mT(m[k].t);}
+  var d=c.dr||{};for(k in d){if(badKey(d,k))continue;if(d[k]&&mT(d[k].t)>t)t=mT(d[k].t);}
+  return t;
+}
+function mTMap(a,b,early){ /* 微测/真题档逐键合并（R3）：双方都有按 t 对决（early=取早，否则取新）；平票 stab 定序防乒乓 */
+  var o={},k;a=a||{};b=b||{};
+  for(k in a){if(badKey(a,k))continue;o[k]=clone(a[k]);}
+  for(k in b){if(badKey(b,k))continue;
+    if(!(k in o)){o[k]=clone(b[k]);continue;}
+    var x=o[k],y=b[k],tx=mT(x&&x.t),ty=mT(y&&y.t);
+    if(tx!==ty)o[k]=clone(early?((tx<ty)?x:y):((tx>ty)?x:y));
+    else o[k]=clone((stab(x)<=stab(y))?x:y);
+  }
+  return o;
+}
+function mPos(a,b){ /* 拍位锚按 ts 取新（R2）：阅读进度不回滚 */
+  if(a==null)return b==null?null:clone(b); if(b==null)return clone(a);
+  var ta=mT(a&&a.ts),tb=mT(b&&b.ts);
+  if(ta>tb)return clone(a); if(tb>ta)return clone(b);
+  return clone((stab(a)<=stab(b))?a:b);
+}
+function mLastk(a,b){ /* 应用级续学指针单键取新（R1）：{k:"",ts}=清空墓碑（壳侧 AU 起），旧 null 视 ts=0 */
+  var ta=(a&&typeof a==="object")?mT(a.ts):0, tb=(b&&typeof b==="object")?mT(b.ts):0;
+  if(ta>tb)return clone(a); if(tb>ta)return clone(b);
+  var sa=stab(a==null?null:a),sb=stab(b==null?null:b);
+  return clone((sa<=sb)?a:b);
+}
 function mMath(l,r){
   var o={cases:{},meta:{}},ids={},id;
   [l.cases,r.cases].forEach(function(m){var mm=m||{};for(var k in mm){if(badKey(mm,k))continue;ids[k]=1;}});
   for(id in ids){if(badKey(ids,id))continue;
     var a=(l.cases||{})[id],b=(r.cases||{})[id];
     if(!a){o.cases[id]=clone(b);continue;} if(!b){o.cases[id]=clone(a);continue;}
+    /* 骨架（star 与未来新增字段前向兼容）＝末次活动新方；调度标量（due,g,seen）＝判题新方（阅读不回滚复习梯） */
     var w=pick(a,b,mathCaseT(l,id),mathCaseT(r,id));
-    o.cases[id]=clone(w);
-    o.cases[id].star=!!(w.star);                       /* star 随胜方（同段活动内的手势） */
+    var c=clone(w);
+    var hw=pick(a,b,hitsT(a),hitsT(b));
+    c.due=hw.due; c.g=hw.g; c.seen=hw.seen;
+    c.star=!!(w.star);
+    c.hits=mArr(a.hits,b.hits,120);       /* 战绩流水并集（去重定序），封顶护信封（并集后必须 cap，防 1MB 界） */
+    c.mc=mTMap(a.mc,b.mc,false);          /* 微测：复习覆盖语义＝取新 */
+    c.dr=mTMap(a.dr,b.dr,true);           /* 真题：一击定案做过不重判＝取早 */
+    c.pos=mPos(a.pos,b.pos);
+    o.cases[id]=c;
   }
   var lm=l.meta||{},rm=r.meta||{};
   var nm=pick(lm,rm,lm.last||0,rm.last||0),om=(nm===lm)?rm:lm;
   Object.keys(om).forEach(function(k){o.meta[k]=om[k];});
   Object.keys(nm).forEach(function(k){o.meta[k]=nm[k];});
   o.meta=clone(o.meta);
+  o.meta.lastk=mLastk(lm.lastk,rm.lastk);
   o.meta.last=Math.max(lm.last||0,rm.last||0); o.meta.ver=1;
   return o;
 }
@@ -4725,7 +4765,13 @@ function syncStore(st,force){ /* force="pushAll"|"pullAll"|null */
       };
       return attempt(0,p.sha).then(function(){
         var fin=(what==="pulled")?"pulled":"pushed";
-        if(lib.sig(env.data)!==lib.sig(st.get())){st.set(clone(env.data));fin="pulled";}  /* 任一 push 成功后：合并果与本地不一致则本地采纳，否则 shadow 记了本地没有的星（E1） */
+        var cur=st.get();
+        if(lib.sig(env.data)!==lib.sig(cur)){
+          /* E11：push 在途窗内壳又 save 过（cur 岔开）——把在途增量并进来再落地，绝不整档回滚现场；
+             并出的档若与已推云端不一致，下轮 saved()/轮询自然再推平（最终一致） */
+          var fold=(cur==null)?env.data:lib.merge(env.data,cur,{base:shadowGet(st.key)});
+          st.set(clone(fold));fin="pulled";
+        }
         if(lib.shadowPick)shadowSet(st.key,lib.shadowPick(env.data));
         sgenSet(st.key,envGen);                                      /* 代确立于推成功之后（推失败不抬本地代，避免旧档复活） */
         return {key:st.key,what:fin};
@@ -5000,7 +5046,9 @@ function mount(adapter){
     setTimeout(function(){syncNow(false,A.firstForce||null);},1500);  /* ?reset=1 主动清档：firstForce="pushAll" 推平云端（沿守渡 WIPED 语义） */
     pollT=setInterval(function(){syncNow(false);},600000);
     document.addEventListener("visibilitychange",function(){
-      if(!document.hidden&&Date.now()-lastOkT>60000)syncNow(false);
+      if(document.hidden){                       /* 切后台：防抖在途即抢发（iOS 冻结前的几秒宽限窗能推完；失败=fail-closed 下轮再推） */
+        if(savedT){clearTimeout(savedT);savedT=0;syncNow(false);}
+      }else if(Date.now()-lastOkT>60000)syncNow(false);
     });
   })();
 }
@@ -5415,7 +5463,22 @@ window.KyEvSite = (function () {
       {key:"ky_math_wrong_v1",get:function(){try{return WB;}catch(e){return null;}},
        set:function(d){WB=d;try{localStorage.setItem(WRONG,JSON.stringify(WB));}catch(e){}}}
     ],
-    applied:function(){try{if(!R){if(typeof buildWall==="function")buildWall();if(typeof drawPlan==="function")drawPlan();}}catch(e){}},
+    applied:function(){try{
+      if(typeof R!=="undefined"&&R){
+        /* 房内：温和重渲当前拍——R.pi/R.committed/browse 全保留，拍内滚动位原地放回；
+           治「拉档后房内 UI 陈旧 → 点击查新 S 已做而静默 return =点了没反应」（AU·R6） */
+        var rm=document.querySelector("#room"),sc=rm?rm.scrollTop:0;
+        if(typeof renderRoom==="function"){renderRoom();if(rm)rm.scrollTop=sc;}
+      }else{
+        if(typeof buildWall==="function")buildWall();
+        if(typeof drawPlan==="function")drawPlan();
+        /* 册页在场（真题册/题页）：重渲上屏新档——渲染纯读 S/EXV 无调度副作用，保滚动位 */
+        var ly=null;try{ly=history.state;}catch(e){}
+        var pg=document.querySelector("#page"),ps=pg?pg.scrollTop:0;
+        if(ly&&ly.v==="drill"&&typeof renderDrill==="function"&&typeof EXV!=="undefined"&&EXV&&EXV.cur){renderDrill();if(pg)pg.scrollTop=ps;}
+        else if(ly&&ly.v==="exam"&&typeof renderExList==="function"&&typeof EXV!=="undefined"&&EXV){renderExList();if(pg)pg.scrollTop=ps;}
+      }
+    }catch(e){}},
     /* P18 件一（共犯）：noClamp——sync_core 的窄屏钳判据 `innerWidth<500` 是自反的（钳到 width=500 后
        innerWidth 恰好读回 500 ⇒ 立刻撤钳 ⇒ 428 ⇒ 再钳），428pt 机上实测每 ~125ms 振荡一次、
        10s 内 84 次视口切换，滚动位置随之乱窜。数学壳改由 math.html 自带的 mReclamp() 接管（配置键迟滞版），
