@@ -871,6 +871,36 @@ html.lockdoc body{overflow:hidden}
   .pback{font-size:.8rem}
 }
 
+/* ————— 桌面大字适配 · 房内顶条恒一行（用户 2026-08-13 亲点「电脑端单独适配、别动移动端」）—————
+   病灶（本轮无头矩阵实测定罪，非推测）：桌面 #rtop 自基础规则起就带 flex-wrap:wrap，而 P16 件三给
+   回看态加的目录行 .rtoc（拍 chip 5 ＋ 讲解节 chip 16＝21 枚）作为 flex item，其假想主尺寸远超容器宽，
+   多行 flex 便把它整块甩到第二行（它内部 nowrap+内滚只在自己那一行生效，不会缩回同一行）；
+   .rx{margin-left:auto} 随之被挤到第三行右端＝用户说的「悬空低垂的 ✕」；又因 #rtop 是 position:fixed
+   不占位、#rin{padding-top:3rem} 是定值，顶条长成三行就压住正文（1400×900 实测：fz1 已压 64px、
+   fz1.5 压 94px、fz2.4 压 150px；学习中的关无 .rtoc 故恒一行不压——字号只是放大器，真凶是目录行折行）。
+   移动端反被 P15/P16 治过（sticky 占位＋常态收起＋展开态定死两行网格），桌面是漏治的那一半。
+   修（只动布局判据，结构与教学逻辑零改）：桌面顶条恒一行——不折行、关名超长走省略号、目录行吃掉
+   剩余宽在自己那格横滚、✕ 回行末原位；回看态把只作读数的 #beats 让给可点的拍 chip（消掉「拍导航
+   两遍」，当前拍由 chip 的 .on 金标承载）。判据 (min-width:821px) and (pointer:fine) 与移动块
+   (max-width:820px),(pointer:coarse) 严格互补无交集 ⇒ 手机/iPad/触屏一条规则未增。 */
+@media(min-width:821px) and (pointer:fine){
+  #rtop{flex-wrap:nowrap}
+  #rtop .rti{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #rtop .rk,#rtop #beats,#rtop .exchip{flex:none}   /* 短件不受挤压变形：要压先压能横滚的目录行 */
+  /* 目录行占剩余宽（min-width:0 基础规则已给），长了在自己那一格横滚；右缘渐隐＝可滑暗示
+     （同墙 .cells 与移动首页 #mchips 的既有手法，无可见滚动条纲领不破；装得下时最后一枚离右缘远、无感）。 */
+  #rtop .rtoc{flex:1 1 0;
+    mask-image:linear-gradient(90deg,#000 92%,transparent);
+    -webkit-mask-image:linear-gradient(90deg,#000 92%,transparent)}
+  #rtop .rx{flex:none}
+  #rtop:has(.rtoc) #beats{display:none}             /* 回看态消重：留可点的拍 chip，撤纯读数的 beats
+                                                       （:has 不支持的旧内核＝两件并存于同一行内滚，仍不折行，优雅降级） */
+  /* 回看态顶条含目录行，一行高度比学习态多约 3px（chip 的边框与内距），#rin 的 3rem 定值顶距会差
+     2~3px 压到正文首行（顶条底缘那一段是全透明渐变，看不出但物理交叠）：只给回看态补 0.2rem，
+     学习态一像素不动（实测 before/after 学习态 rtop 高与 ✕ 坐标逐值相同）。 */
+  #rtop:has(.rtoc)+#rin{padding-top:3.2rem}
+}
+
 /* ————— 4K/高分屏字号（WE 桌面壁纸 3840×2160 字太小 → 放大 rem 基准；
    rem-only 布局跨字号自相似；墙章簇框 .cells 放大溢出即内部滚动，「整墙一屏」不破）
    ——— 24/33px 同乘 var(--fz) 保留手动旋钮（只加不改基准；旋钮域 0.7~2.4） ————— */
@@ -4444,7 +4474,7 @@ boot();
   $$(".cells").forEach(mount);   /* boot 期已渲的章簇框补挂（后续 buildWall 各自补挂新簇框） */
 })();
 </script>
-<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @dc64341c81 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
+<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @5ef5018499 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
 <script src="sync_cfg.js"></script>
 <script>
 /* ============================================================================
@@ -5555,13 +5585,81 @@ window.KyEvSite = (function () {
   try{KyEvSite.init({app:"数学",blocked:function(){try{return !!(ST||SEEDED);}catch(e){return true;}}});}catch(e){}
 })();
 
-/* ---- 划记递问（陪读体系·2026-08-13 学生亲点）----
-   选中一段文字稳定 0.8s ＝「这段不懂」→ POST 127.0.0.1:8422/ask（面板服务 inbox，
-   看门狗转信号，驻场助教 step-by-step）。纯环回、fetch 默认 text/plain 简单请求零预检；
-   面板服务不在＝静默失败（catch 吞掉，教材零感知）。≥8 字防误触（双击选词不触发）、
-   同文防抖；ST/SEEDED 免上报（与 KyEv 同口径）；成功后右下角暗金微标 1.6s 自消。 */
+/* ---- 远程等效层＋划记递问（陪读体系·2026-08-13 学生亲令「上公网绝不降级助教」）----
+   电脑：一切走环回（划记→8422 inbox；KyEv→8418 流水），零出网。
+   公网 https（tricgrizen.com/math/ 手机 PWA）：
+     ①行为流水双发——包 KyEv.log，语义事件（rec/judge/roomopen/roomclose/pos/rhb…）1.5s 微批
+       POST {隧道}/ev → 面板服务转投 8418 落同一份 events jsonl → 看门狗/助教全链零改动、
+       实时性与 PC 等效；seal 单独包（click 委托拦不到），发 click/act=seal 同构行。
+     ②划记——环回失败自动改投隧道 /ask。
+   隧道地址自动寻址：读同域 ky_sync_cfg 的 token（云档既有信道）→ 私仓 s/tutor_live.json
+   （开课时面板服务推的）→ sessionStorage 缓存；>20h 视为死链不投。ST/SEEDED 全免。 */
 (function(){
-  var last="",tmr=null;
+  var last="",tmr=null,LIVE=null,RQ=[],RT=null;
+  function blocked(){try{return !!(ST||SEEDED);}catch(e){return true;}}
+  function isRemote(){try{return location.protocol==="https:"&&!/^(127\.|localhost)/.test(location.hostname);}catch(e){return false;}}
+  function liveUrl(cb){
+    if(LIVE)return cb(LIVE);
+    var c=null;
+    try{c=sessionStorage.getItem("ky_tutor_live");}catch(e){}
+    if(c){LIVE=c;return cb(c);}
+    var cfg=null;
+    try{cfg=JSON.parse(localStorage.getItem("ky_sync_cfg")||"null");}catch(e){}
+    if(!cfg||!cfg.tok||!cfg.repo)return;
+    fetch("https://api.github.com/repos/"+cfg.repo+"/contents/s/tutor_live.json",
+      {headers:{"Authorization":"Bearer "+cfg.tok,"Accept":"application/vnd.github.raw"}})
+      .then(function(r){return r.ok?r.json():null})
+      .then(function(d){
+        if(!d||!d.url)return;
+        if(Date.now()-(d.ts||0)>72000000)return;   /* >20h＝死链哨 */
+        LIVE=d.url;
+        try{sessionStorage.setItem("ky_tutor_live",LIVE);}catch(e){}
+        cb(LIVE);
+      }).catch(function(){});
+  }
+  function post(path,body,okcb){
+    var go=function(base){
+      fetch(base.replace(/\/$/,"")+path,{method:"POST",body:body})
+        .then(function(r){if(r&&r.ok&&okcb)okcb();
+          else if(!(r&&r.ok)){LIVE=null;try{sessionStorage.removeItem("ky_tutor_live");}catch(e){}}})
+        .catch(function(){LIVE=null;try{sessionStorage.removeItem("ky_tutor_live");}catch(e){}});
+    };
+    if(isRemote())liveUrl(go);
+    else go("http://127.0.0.1:8422");
+  }
+  /* ①流水双发（仅公网；本地 KyEv 自己 POST 8418 不重复） */
+  function rflush(){
+    if(!RQ.length)return;
+    var evs=RQ.splice(0);
+    post("/ev",JSON.stringify({sid:"mobile",evs:evs}));
+  }
+  function relay(e,d){
+    try{
+      if(!isRemote()||blocked())return;
+      var ev={t:Date.now(),app:"math",e:e};
+      try{
+        if(typeof R!=="undefined"&&R&&R.level){ev.r=R.level.id;ev.kind=R.kind||null;}
+      }catch(_){}
+      if(d)for(var k in d)if(Object.prototype.hasOwnProperty.call(d,k))ev[k]=d[k];
+      RQ.push(ev);
+      if(RQ.length>=20)rflush();
+      else{clearTimeout(RT);RT=setTimeout(rflush,1500);}
+    }catch(_){}
+  }
+  try{
+    if(window.KyEv&&KyEv.log){
+      var _kl=KyEv.log;
+      KyEv.log=function(e,d){try{relay(e,d);}catch(_){}return _kl.apply(this,arguments);};
+    }
+  }catch(e){}
+  try{
+    if(typeof seal==="function"){
+      var _seal=seal;
+      seal=function(){try{relay("click",{d:{act:"seal"}});}catch(_){}return _seal.apply(this,arguments);};
+    }
+  }catch(e){}
+  try{document.addEventListener("visibilitychange",function(){if(document.hidden)rflush();});}catch(e){}
+  /* ②划记 */
   function flash(){
     try{
       var el=document.createElement("div");
@@ -5576,8 +5674,7 @@ window.KyEvSite = (function () {
   }
   function ship(){
     try{
-      if(typeof ST!=="undefined"&&ST)return;
-      if(typeof SEEDED!=="undefined"&&SEEDED)return;
+      if(blocked())return;
       var sel=window.getSelection?String(window.getSelection()):"";
       sel=sel.replace(/\s+/g," ").trim();
       if(sel.length<8||sel===last)return;
@@ -5588,9 +5685,7 @@ window.KyEvSite = (function () {
           ctx={r:R.level.id,p:R.pi|0,a:(typeof curAnchor==="function")?(curAnchor()|0):null};
         }
       }catch(e){}
-      fetch("http://127.0.0.1:8422/ask",{method:"POST",
-        body:JSON.stringify({text:sel.slice(0,600),kind:"mark",ctx:ctx})})
-        .then(function(r){if(r&&r.ok)flash();}).catch(function(){});
+      post("/ask",JSON.stringify({text:sel.slice(0,600),kind:"mark",ctx:ctx}),flash);
     }catch(e){}
   }
   try{
