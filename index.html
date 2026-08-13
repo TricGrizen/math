@@ -4444,7 +4444,7 @@ boot();
   $$(".cells").forEach(mount);   /* boot 期已渲的章簇框补挂（后续 buildWall 各自补挂新簇框） */
 })();
 </script>
-<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @358388c471 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
+<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @dc64341c81 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
 <script src="sync_cfg.js"></script>
 <script>
 /* ============================================================================
@@ -5511,6 +5511,40 @@ window.KyEvSite = (function () {
   try{var _rc=roomClose;roomClose=function(){try{if(typeof R!=="undefined"&&R)L("roomclose",{});}catch(_){}return _rc.apply(this,arguments);};}catch(e){}
   try{var _ol=openLevel;openLevel=function(id){L("roomopen",{id:id});return _ol.apply(this,arguments);};}catch(e){}
   try{var _af=applyFz;applyFz=function(){try{L("fz",{fz:(typeof MFZ!=="undefined")?MFZ:null});}catch(_){}return _af.apply(this,arguments);};}catch(e){}
+  /* pos＝节级位置（p 拍序＋a 拍内锚：讲解拍=可视节序、跟算拍=当前步序）。posSave 是壳内唯一落位点
+     （拍切换即写／滚动防抖 3s／离房离页即写），包它即拿到「读到第几拍第几节」的最终态。
+     包层自去重（id/p/a 三元组变过才发）：壳内 posSave 同值不写盘、但仍会被反复调到，去重防刷流水。 */
+  try{
+    var _pos=posSave,LPOS=null;
+    posSave=function(){
+      var rv=_pos.apply(this,arguments);
+      try{
+        if(typeof R!=="undefined"&&R&&R.level){
+          var id=R.level.id,c=(typeof S!=="undefined"&&S&&S.cases)?S.cases[id]:null,p=c&&c.pos;
+          if(p&&typeof p.p==="number"){
+            var np={id:id,p:p.p|0,a:(typeof p.a==="number")?(p.a|0):0};
+            if(!LPOS||LPOS.id!==np.id||LPOS.p!==np.p||LPOS.a!==np.a){LPOS=np;L("pos",np);}
+          }
+        }
+      }catch(_){}
+      return rv;
+    };
+  }catch(e){}
+  /* rhb＝房内心跳（60s）：静读也是在读——只有 pos/rec 的话，学生停在同一节看十分钟＝流水一片空白。
+     不在房／页面隐藏＝零发送；blocked（ST/SEEDED）由 KyEv.log 内部口径自然拦，不重复判。
+     锚取 curAnchor()（壳内全局，实时量视口），失败退存档 case.pos.a，再失败丢 a 保 p（拍序恒可得）。 */
+  try{
+    setInterval(function(){
+      try{
+        if(typeof R==="undefined"||!R||document.hidden)return;
+        var id=(R.level&&R.level.id)||null,a=null;
+        try{a=curAnchor()|0;}catch(_){a=null;}
+        if(a===null){try{var c=S.cases[id],p=c&&c.pos;a=(p&&typeof p.a==="number")?(p.a|0):null;}catch(_2){a=null;}}
+        if(a===null)L("rhb",{id:id,p:R.pi|0});
+        else L("rhb",{id:id,p:R.pi|0,a:a});
+      }catch(_){}
+    },60000);
+  }catch(e){}
 })();
 
 /* ---- 站群使用事件回传（M1；evsite_core 已同块注入）----
@@ -5519,6 +5553,50 @@ window.KyEvSite = (function () {
 (function(){
   if(!window.KyEvSite)return;
   try{KyEvSite.init({app:"数学",blocked:function(){try{return !!(ST||SEEDED);}catch(e){return true;}}});}catch(e){}
+})();
+
+/* ---- 划记递问（陪读体系·2026-08-13 学生亲点）----
+   选中一段文字稳定 0.8s ＝「这段不懂」→ POST 127.0.0.1:8422/ask（面板服务 inbox，
+   看门狗转信号，驻场助教 step-by-step）。纯环回、fetch 默认 text/plain 简单请求零预检；
+   面板服务不在＝静默失败（catch 吞掉，教材零感知）。≥8 字防误触（双击选词不触发）、
+   同文防抖；ST/SEEDED 免上报（与 KyEv 同口径）；成功后右下角暗金微标 1.6s 自消。 */
+(function(){
+  var last="",tmr=null;
+  function flash(){
+    try{
+      var el=document.createElement("div");
+      el.textContent="✓ 已递给助教";
+      el.style.cssText="position:fixed;right:14px;bottom:14px;z-index:99999;font-size:11px;"
+        +"color:#9a7b4f;background:rgba(0,0,0,.78);padding:3px 9px;border-radius:2px;"
+        +"opacity:0;transition:opacity .3s;pointer-events:none";
+      document.body.appendChild(el);
+      requestAnimationFrame(function(){el.style.opacity="1";});
+      setTimeout(function(){el.style.opacity="0";setTimeout(function(){try{el.remove();}catch(e){}},400);},1600);
+    }catch(e){}
+  }
+  function ship(){
+    try{
+      if(typeof ST!=="undefined"&&ST)return;
+      if(typeof SEEDED!=="undefined"&&SEEDED)return;
+      var sel=window.getSelection?String(window.getSelection()):"";
+      sel=sel.replace(/\s+/g," ").trim();
+      if(sel.length<8||sel===last)return;
+      last=sel;
+      var ctx={};
+      try{
+        if(typeof R!=="undefined"&&R&&R.level){
+          ctx={r:R.level.id,p:R.pi|0,a:(typeof curAnchor==="function")?(curAnchor()|0):null};
+        }
+      }catch(e){}
+      fetch("http://127.0.0.1:8422/ask",{method:"POST",
+        body:JSON.stringify({text:sel.slice(0,600),kind:"mark",ctx:ctx})})
+        .then(function(r){if(r&&r.ok)flash();}).catch(function(){});
+    }catch(e){}
+  }
+  try{
+    document.addEventListener("mouseup",function(){clearTimeout(tmr);tmr=setTimeout(ship,800);});
+    document.addEventListener("touchend",function(){clearTimeout(tmr);tmr=setTimeout(ship,900);});
+  }catch(e){}
 })();
 </script>
 <!--KY-SYNC-END-->
