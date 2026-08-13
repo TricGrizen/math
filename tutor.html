@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>陪读</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#000;color:#b0b0b0;font:14px/1.8 system-ui,-apple-system,"Microsoft YaHei",sans-serif;
+       min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{max-width:340px;width:100%}
+  .brand{font-size:12px;letter-spacing:.5em;color:#4a4a4a;margin-bottom:18px}
+  #msg{color:#8a8a8a;min-height:2em}
+  #msg b{color:#c9b189;font-weight:400}
+  input{width:100%;background:#0d0d0d;border:1px solid #1c1c1c;color:#ccc;padding:9px 11px;
+        border-radius:3px;font:13px monospace;margin:12px 0 8px;outline:0}
+  input:focus{border-color:#3a3a3a}
+  button{background:#161310;border:1px solid #6b5232;color:#c9b189;padding:7px 18px;
+         border-radius:3px;font-size:13px;cursor:pointer}
+  #tokform{display:none}
+  .dim{color:#3a3a3a;font-size:11px;margin-top:14px}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand">陪 读</div>
+  <div id="msg">正在寻址…</div>
+  <div id="tokform">
+    <input id="tok" placeholder="github_pat_…（ky-sync 私仓 token，贴一次永久）" autocomplete="off">
+    <button id="save">保存并连接</button>
+  </div>
+  <div class="dim">面板地址每次开课会变，此页自动寻址跳转——收藏这一页即可。<br>未开播时在电脑上对主脑说「开」。</div>
+</div>
+<script>
+(function(){
+"use strict";
+var M=document.getElementById("msg"),F=document.getElementById("tokform");
+function cfg(){try{return JSON.parse(localStorage.getItem("ky_sync_cfg")||"null");}catch(e){return null}}
+function go(){
+  var c=cfg();
+  if(!c||!c.tok){M.textContent="首次使用：贴一次云档 token（与教材 ⇅ 面板同一枚）";F.style.display="block";return;}
+  M.textContent="正在寻址…";
+  fetch("https://api.github.com/repos/"+(c.repo||"TricGrizen/ky-sync")+"/contents/s/tutor_live.json",
+    {headers:{"Authorization":"Bearer "+c.tok,"Accept":"application/vnd.github.raw"}})
+    .then(function(r){
+      if(r.status===401||r.status===403){M.textContent="token 无效或权限不足——重贴一枚";F.style.display="block";return null;}
+      return r.ok?r.json():null;
+    })
+    .then(function(d){
+      if(d===null)return;
+      if(!d||!d.url||Date.now()-(d.ts||0)>72000000){
+        M.innerHTML="面板<b>未开播</b>——电脑上说「开」，此页 15 秒后自动重试。";
+        setTimeout(go,15000);return;
+      }
+      M.innerHTML="已寻到，正在进入…";
+      location.href=d.url;
+    })
+    .catch(function(){M.textContent="网络不可达，15 秒后重试。";setTimeout(go,15000);});
+}
+document.getElementById("save").addEventListener("click",function(){
+  var v=document.getElementById("tok").value.trim();
+  if(!v)return;
+  var c=cfg()||{};
+  c.tok=v;c.repo=c.repo||"TricGrizen/ky-sync";c.dev=c.dev||"移动";if(c.on===undefined)c.on=true;
+  try{localStorage.setItem("ky_sync_cfg",JSON.stringify(c));}catch(e){}
+  F.style.display="none";go();
+});
+go();
+})();
+</script>
+</body>
+</html>
