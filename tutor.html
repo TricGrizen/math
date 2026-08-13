@@ -2,46 +2,65 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="陪读">
+<link rel="apple-touch-icon" href="./tutor-icon.png">
 <title>陪读</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
-  body{background:#000;color:#b0b0b0;font:14px/1.8 system-ui,-apple-system,"Microsoft YaHei",sans-serif;
-       min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  html,body{height:100%;background:#000}
+  body{color:#b0b0b0;font:14px/1.8 system-ui,-apple-system,"Microsoft YaHei",sans-serif}
+  /* 面板就地内嵌：地址栏/PWA 壳永远是自己的域，无跳转无套壳 */
+  #pane{display:none;border:0;width:100%;height:100%}
+  #boot{height:100%;display:flex;align-items:center;justify-content:center;padding:24px}
   .card{max-width:340px;width:100%}
   .brand{font-size:12px;letter-spacing:.5em;color:#4a4a4a;margin-bottom:18px}
   #msg{color:#8a8a8a;min-height:2em}
   #msg b{color:#c9b189;font-weight:400}
-  input{width:100%;background:#0d0d0d;border:1px solid #1c1c1c;color:#ccc;padding:9px 11px;
+  input{width:100%;background:#0d0d0d;border:1px solid #1c1c1c;color:#ccc;padding:10px 12px;
         border-radius:3px;font:13px monospace;margin:12px 0 8px;outline:0}
   input:focus{border-color:#3a3a3a}
-  button{background:#161310;border:1px solid #6b5232;color:#c9b189;padding:7px 18px;
-         border-radius:3px;font-size:13px;cursor:pointer}
+  button{background:#161310;border:1px solid #6b5232;color:#c9b189;padding:8px 20px;
+         border-radius:3px;font-size:14px;cursor:pointer}
   #tokform{display:none}
   .dim{color:#3a3a3a;font-size:11px;margin-top:14px}
 </style>
 </head>
 <body>
-<div class="card">
-  <div class="brand">陪 读</div>
-  <div id="msg">正在寻址…</div>
-  <div id="tokform">
-    <input id="tok" placeholder="github_pat_…（ky-sync 私仓 token，贴一次永久）" autocomplete="off">
-    <button id="save">保存并连接</button>
+<div id="boot">
+  <div class="card">
+    <div class="brand">陪 读</div>
+    <div id="msg">正在寻址…</div>
+    <div id="tokform">
+      <input id="tok" placeholder="github_pat_…（与教材 ⇅ 面板同一枚）" autocomplete="off">
+      <button id="save">保存并连接</button>
+    </div>
+    <div class="dim">收藏/主屏加的就是本页——面板地址每次开课会变，此页自动寻址、就地呈现。<br>未开播时在电脑上对主脑说「开」。</div>
   </div>
-  <div class="dim">面板地址每次开课会变，此页自动寻址跳转——收藏这一页即可。<br>未开播时在电脑上对主脑说「开」。</div>
 </div>
+<iframe id="pane"></iframe>
 <script>
 (function(){
 "use strict";
-var M=document.getElementById("msg"),F=document.getElementById("tokform");
+var BOOT=document.getElementById("boot"),PANE=document.getElementById("pane"),
+    M=document.getElementById("msg"),F=document.getElementById("tokform");
+var CUR=null,FAILS=0;
 function cfg(){try{return JSON.parse(localStorage.getItem("ky_sync_cfg")||"null");}catch(e){return null}}
-function go(){
+function show(u){
+  CUR=u;FAILS=0;
+  PANE.src=u;PANE.style.display="block";BOOT.style.display="none";
+}
+function back(msg){
+  CUR=null;PANE.style.display="none";PANE.src="about:blank";
+  BOOT.style.display="flex";M.innerHTML=msg;
+}
+function locate(){
   var c=cfg();
   if(!c||!c.tok){M.textContent="首次使用：贴一次云档 token（与教材 ⇅ 面板同一枚）";F.style.display="block";return;}
-  M.textContent="正在寻址…";
   fetch("https://api.github.com/repos/"+(c.repo||"TricGrizen/ky-sync")+"/contents/s/tutor_live.json",
-    {headers:{"Authorization":"Bearer "+c.tok,"Accept":"application/vnd.github.raw"}})
+    {headers:{"Authorization":"Bearer "+c.tok,"Accept":"application/vnd.github.raw"},cache:"no-store"})
     .then(function(r){
       if(r.status===401||r.status===403){M.textContent="token 无效或权限不足——重贴一枚";F.style.display="block";return null;}
       return r.ok?r.json():null;
@@ -49,23 +68,32 @@ function go(){
     .then(function(d){
       if(d===null)return;
       if(!d||!d.url||Date.now()-(d.ts||0)>72000000){
-        M.innerHTML="面板<b>未开播</b>——电脑上说「开」，此页 15 秒后自动重试。";
-        setTimeout(go,15000);return;
+        M.innerHTML="面板<b>未开播</b>——电脑上说「开」，此页自动重试中。";
+        setTimeout(locate,15000);return;
       }
-      M.innerHTML="已寻到，正在进入…";
-      location.href=d.url;
+      show(d.url);
     })
-    .catch(function(){M.textContent="网络不可达，15 秒后重试。";setTimeout(go,15000);});
+    .catch(function(){M.textContent="网络不可达，15 秒后重试。";setTimeout(locate,15000);});
 }
+/* 探活：隧道换代（重新开课）时自动重寻——两连败才回寻址页，防偶发抖动 */
+setInterval(function(){
+  if(!CUR)return;
+  var ctl=("AbortController" in window)?new AbortController():null;
+  if(ctl)setTimeout(function(){ctl.abort()},8000);
+  fetch(CUR+"/state",{signal:ctl?ctl.signal:undefined,cache:"no-store"})
+    .then(function(r){if(r.ok)FAILS=0;else if(++FAILS>=2)relocate();})
+    .catch(function(){if(++FAILS>=2)relocate();});
+},60000);
+function relocate(){back("面板失联——正在重新寻址…");locate();}
 document.getElementById("save").addEventListener("click",function(){
   var v=document.getElementById("tok").value.trim();
   if(!v)return;
   var c=cfg()||{};
   c.tok=v;c.repo=c.repo||"TricGrizen/ky-sync";c.dev=c.dev||"移动";if(c.on===undefined)c.on=true;
   try{localStorage.setItem("ky_sync_cfg",JSON.stringify(c));}catch(e){}
-  F.style.display="none";go();
+  F.style.display="none";locate();
 });
-go();
+locate();
 })();
 </script>
 </body>
