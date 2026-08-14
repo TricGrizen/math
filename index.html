@@ -749,8 +749,14 @@ body.gv #gvn{color:var(--gold);border-color:#3a3524}
      零动画、纯内存（body 类，不落盘）；进房默认非纯净态（可发现性）。 */
   body.clean #rtop{display:none}
   body.clean #kysync-btn{display:none}
-  body.clean #rnav{display:none}   /* 桌面纯净态：底部固定导航条一并藏（移动下它本就 none，无副作用） */
 }
+
+/* 纯净态·全局版（2026-08-14 陪读窗放开到桌面，学生亲点）——上面那组躺在移动媒体查询块内，
+   桌面下 body.clean 类挂上了却无一条规则生效＝首发哑火的病根；此处全局兜底两端通用。 */
+body.clean #rtop{display:none}
+body.clean #kysync-btn{display:none}
+body.clean #rnav{display:none}
+body.clean #fzctl{display:none}
 
 /* ————— P16 件一 · 移动首页（≤820px 才现身；桌面 ≥821px 分毫不动）—————
    四行定死：①「数学宇宙」＋距初试（不折行）②chip 排横向内滚（速查/真题册/触发器/错题档/刷题/单独记/?）
