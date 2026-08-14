@@ -4474,7 +4474,7 @@ boot();
   $$(".cells").forEach(mount);   /* boot 期已渲的章簇框补挂（后续 buildWall 各自补挂新簇框） */
 })();
 </script>
-<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @91910aca99 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
+<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @e120c2cab2 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
 <script src="sync_cfg.js"></script>
 <script>
 /* ============================================================================
@@ -5678,9 +5678,49 @@ window.KyEvSite = (function () {
       setTimeout(function(){el.style.opacity="0";setTimeout(function(){try{el.remove();}catch(e){}},400);},1600);
     }catch(e){}
   }
+  /* 划记浮条：圈住 ≠ 说清问题——就地弹一条可补话的小条（学生 2026-08-14 亲点）。
+     空着回车＝纯圈发（原行为）；打了字回车＝圈＋问题一起递；Esc/点外＝取消。 */
+  var BARC=null;
+  function killBar(){if(BARC){try{BARC.remove();}catch(e){}BARC=null;}}
+  function showBar(sel,ctx){
+    killBar();
+    var rc=null;
+    try{var rg=window.getSelection().getRangeAt(0);rc=rg.getBoundingClientRect();}catch(e){}
+    var top=rc?Math.min(window.innerHeight-64,rc.bottom+8):window.innerHeight-72;
+    var lf=rc?Math.max(8,Math.min(window.innerWidth-330,rc.left)):14;
+    var el=document.createElement("div");
+    el.style.cssText="position:fixed;left:"+lf+"px;top:"+top+"px;z-index:99999;background:rgba(5,5,5,.96);"
+      +"border:1px solid #6b5232;border-radius:3px;padding:7px 9px;width:320px;box-sizing:border-box;"
+      +"font-size:12px;color:#8a8a8a;font-family:system-ui,'Microsoft YaHei',sans-serif";
+    el.innerHTML='<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#5c5c5c;margin-bottom:5px">'
+      +'圈：<span style="color:#c9b189">'+sel.slice(0,22).replace(/</g,"&lt;")+(sel.length>22?"…":"")+'</span></div>'
+      +'<input style="width:100%;box-sizing:border-box;background:transparent;border:0;border-bottom:1px solid #2a2a2a;'
+      +'outline:0;color:#ccc;font-size:12.5px;padding:2px 0" placeholder="补一句问题（可空）——回车递给助教，Esc 取消">';
+    document.body.appendChild(el);BARC=el;
+    var inp=el.querySelector("input");
+    setTimeout(function(){try{inp.focus();}catch(e){}},50);
+    inp.addEventListener("keydown",function(ev){
+      ev.stopPropagation();
+      if(ev.key==="Escape"){killBar();return;}
+      if(ev.key!=="Enter")return;
+      var note=inp.value.trim();
+      var pl={text:sel.slice(0,600),kind:"mark",ctx:ctx};
+      if(note)pl.note=note.slice(0,500);
+      killBar();
+      post("/ask",JSON.stringify(pl),flash);
+    });
+    el.addEventListener("mousedown",function(ev){ev.stopPropagation();});
+    setTimeout(function(){
+      document.addEventListener("mousedown",function h(ev){
+        if(BARC&&!BARC.contains(ev.target)){killBar();}
+        document.removeEventListener("mousedown",h);
+      });
+    },100);
+  }
   function ship(){
     try{
       if(blocked())return;
+      if(BARC)return;                                  /* 浮条开着＝正在补话，别抢 */
       var sel=window.getSelection?String(window.getSelection()):"";
       sel=sel.replace(/\s+/g," ").trim();
       if(sel.length<8||sel===last)return;
@@ -5691,7 +5731,7 @@ window.KyEvSite = (function () {
           ctx={r:R.level.id,p:R.pi|0,a:(typeof curAnchor==="function")?(curAnchor()|0):null};
         }
       }catch(e){}
-      post("/ask",JSON.stringify({text:sel.slice(0,600),kind:"mark",ctx:ctx}),flash);
+      showBar(sel,ctx);
     }catch(e){}
   }
   try{
