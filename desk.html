@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="学">
+<link rel="apple-touch-icon" href="./desk-icon.png">
+<title>数学宇宙 · 陪读</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;background:#000;overflow:hidden}
+  body{color:#b0b0b0;font:13px/1.7 system-ui,-apple-system,"Microsoft YaHei",sans-serif;
+       padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+  .wrap{display:flex;height:100%}
+  iframe{border:0;height:100%;display:block}
+  #m{flex:1;min-width:0}
+  #b{width:340px}
+  #bar{width:9px;cursor:col-resize;background:#0a0a0a;position:relative;flex:none;transition:background .3s}
+  @media(pointer:coarse){#bar{width:20px}}
+  #bar:hover,#bar.on{background:#1c1c1c}
+  #fzh{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);cursor:pointer;
+       color:#4a4a4a;font:12px/1 system-ui;padding:16px 4px;writing-mode:vertical-rl;
+       letter-spacing:3px;user-select:none;-webkit-user-select:none}
+  #fzh:hover{color:#9a7b4f}
+  #fzcard{position:absolute;top:50%;right:14px;transform:translateY(-50%);display:none;
+          background:#0d0d0d;border:1px solid #1c1c1c;border-radius:3px;padding:8px 10px;
+          font-size:13px;line-height:2.2;color:#666;white-space:nowrap;user-select:none;
+          -webkit-user-select:none;z-index:9}
+  #fzcard.show{display:block}
+  #fzcard b{color:#8a8a8a;font-weight:400;margin-right:6px}
+  #fzcard span{cursor:pointer;padding:3px 9px;color:#777}
+  #fzcard span:active{color:#c9b189}
+  #fzcard .v{color:#4a4a4a;padding:0 2px;cursor:default}
+  /* 右侧寻址态（面板未连上时占位；连上后隐藏） */
+  #bboot{width:340px;flex:none;display:flex;align-items:center;justify-content:center;padding:20px;
+         border-left:1px solid #141414}
+  .card{max-width:280px}
+  .brand{font-size:11px;letter-spacing:.5em;color:#4a4a4a;margin-bottom:14px}
+  #msg{color:#8a8a8a;font-size:13px;min-height:2em}
+  #msg b{color:#c9b189;font-weight:400}
+  input{width:100%;background:#0d0d0d;border:1px solid #1c1c1c;color:#ccc;padding:9px 11px;
+        border-radius:3px;font:12px monospace;margin:10px 0 8px;outline:0}
+  button{background:#161310;border:1px solid #6b5232;color:#c9b189;padding:7px 18px;
+         border-radius:3px;font-size:13px}
+  #tokform{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <iframe id="m" src="./"></iframe>
+  <div id="bar">
+    <div id="fzh">字</div>
+    <div id="fzcard">
+      <div><b>教材</b><span data-t="m" data-d="-1">A−</span><span class="v" id="vm">壳</span><span data-t="m" data-d="1">A＋</span></div>
+      <div><b>面板</b><span data-t="b" data-d="-1">A−</span><span class="v" id="vb">1.0</span><span data-t="b" data-d="1">A＋</span></div>
+    </div>
+  </div>
+  <div id="bboot">
+    <div class="card">
+      <div class="brand">陪 读</div>
+      <div id="msg">正在寻址…</div>
+      <div id="tokform">
+        <input id="tok" placeholder="github_pat_…（与教材 ⇅ 同一枚）" autocomplete="off">
+        <button id="save">保存并连接</button>
+      </div>
+    </div>
+  </div>
+  <iframe id="b" style="display:none"></iframe>
+</div>
+<script>
+(function(){
+"use strict";
+var $=function(s){return document.querySelector(s)};
+var M=$("#m"),B=$("#b"),BAR=$("#bar"),BOOT=$("#bboot"),MSG=$("#msg"),F=$("#tokform");
+var LS=function(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v);}catch(e){return null}};
+var mfz=parseFloat(LS("ky_desk_mfz"))||0, bfz=parseFloat(LS("ky_desk_bfz"))||1;
+var rw=parseInt(LS("ky_desk_rw"))||340, CUR=null, FAILS=0;
+function clamp(x,a,b){return x<a?a:x>b?b:x}
+function cfg(){try{return JSON.parse(localStorage.getItem("ky_sync_cfg")||"null");}catch(e){return null}}
+function loadM(){M.src="./"+(mfz?("?fz="+mfz.toFixed(1)):"");}
+function pushB(){try{B.contentWindow.postMessage({tbfz:bfz},"*");}catch(e){}}
+function labels(){$("#vm").textContent=mfz?mfz.toFixed(1):"壳";$("#vb").textContent=bfz.toFixed(1);}
+function setW(w){w=clamp(w,0,Math.max(60,window.innerWidth-20));B.style.width=w+"px";BOOT.style.width=w+"px";}
+
+setW(rw);loadM();labels();
+B.addEventListener("load",pushB);
+
+/* 面板寻址（同 tutor.html 一套：token→私仓 live 文件→隧道） */
+function show(u){CUR=u;FAILS=0;B.src=u;B.style.display="block";BOOT.style.display="none";}
+function back(m){CUR=null;B.style.display="none";B.src="about:blank";BOOT.style.display="flex";MSG.innerHTML=m;}
+function locate(){
+  var c=cfg();
+  if(!c||!c.tok){MSG.textContent="首次使用：贴一次云档 token";F.style.display="block";return;}
+  fetch("https://api.github.com/repos/"+(c.repo||"TricGrizen/ky-sync")+"/contents/s/tutor_live.json",
+    {headers:{"Authorization":"Bearer "+c.tok,"Accept":"application/vnd.github.raw"},cache:"no-store"})
+    .then(function(r){
+      if(r.status===401||r.status===403){MSG.textContent="token 无效——重贴一枚";F.style.display="block";return null;}
+      return r.ok?r.json():null;
+    })
+    .then(function(d){
+      if(d===null)return;
+      if(!d||!d.url||Date.now()-(d.ts||0)>72000000){
+        MSG.innerHTML="面板<b>未开播</b>——电脑上说「开」，此处自动重试。";
+        setTimeout(locate,15000);return;
+      }
+      show(d.url);
+    })
+    .catch(function(){MSG.textContent="网络不可达，15 秒后重试。";setTimeout(locate,15000);});
+}
+$("#save").addEventListener("click",function(){
+  var v=$("#tok").value.trim();if(!v)return;
+  var c=cfg()||{};c.tok=v;c.repo=c.repo||"TricGrizen/ky-sync";c.dev=c.dev||"iPad";if(c.on===undefined)c.on=true;
+  try{localStorage.setItem("ky_sync_cfg",JSON.stringify(c));}catch(e){}
+  F.style.display="none";locate();
+});
+locate();
+setInterval(function(){                        /* 隧道换代自动重寻：两连败才回寻址页 */
+  if(!CUR)return;
+  var ctl=("AbortController" in window)?new AbortController():null;
+  if(ctl)setTimeout(function(){ctl.abort()},8000);
+  fetch(CUR+"/state",{signal:ctl?ctl.signal:undefined,cache:"no-store"})
+    .then(function(r){if(r.ok)FAILS=0;else if(++FAILS>=2){back("面板失联——重新寻址…");locate();}})
+    .catch(function(){if(++FAILS>=2){back("面板失联——重新寻址…");locate();}});
+},60000);
+
+/* 拖条（触摸/鼠标通用；「字」手柄与卡片走 click，裸条才拖） */
+var drag=false;
+BAR.addEventListener("pointerdown",function(e){
+  if(e.target!==BAR)return;
+  drag=true;BAR.classList.add("on");BAR.setPointerCapture(e.pointerId);
+  M.style.pointerEvents=B.style.pointerEvents="none";e.preventDefault();
+});
+BAR.addEventListener("pointermove",function(e){
+  if(!drag)return;
+  setW(window.innerWidth-e.clientX-10);
+});
+BAR.addEventListener("pointerup",function(){
+  if(!drag)return;
+  drag=false;BAR.classList.remove("on");
+  M.style.pointerEvents=B.style.pointerEvents="";
+  LS("ky_desk_rw",parseInt(B.style.width));
+});
+
+/* 字号卡 */
+var CARD=$("#fzcard");
+$("#fzh").addEventListener("click",function(e){e.stopPropagation();CARD.classList.toggle("show");});
+document.addEventListener("click",function(e){
+  if(CARD.classList.contains("show")&&!CARD.contains(e.target)&&e.target.id!=="fzh")CARD.classList.remove("show");
+});
+window.addEventListener("blur",function(){CARD.classList.remove("show");});
+CARD.addEventListener("click",function(e){
+  e.stopPropagation();
+  var t=e.target,ty=t.getAttribute&&t.getAttribute("data-t");
+  if(!ty)return;
+  var d=+t.getAttribute("data-d")*0.1;
+  if(ty==="m"){mfz=clamp(+(((mfz||1))+d).toFixed(1),0.7,2.4);LS("ky_desk_mfz",mfz);loadM();}
+  else{bfz=clamp(+(bfz+d).toFixed(1),0.7,2.2);LS("ky_desk_bfz",bfz);pushB();}
+  labels();
+});
+})();
+</script>
+</body>
+</html>
