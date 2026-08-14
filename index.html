@@ -4485,7 +4485,7 @@ boot();
   $$(".cells").forEach(mount);   /* boot 期已渲的章簇框补挂（后续 buildWall 各自补挂新簇框） */
 })();
 </script>
-<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @a8ae70c442 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
+<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @8380bbc51d 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
 <script src="sync_cfg.js"></script>
 <script>
 /* ============================================================================
@@ -5757,6 +5757,21 @@ window.KyEvSite = (function () {
   try{
     document.addEventListener("mouseup",function(){clearTimeout(tmr);tmr=setTimeout(ship,800);});
     document.addEventListener("touchend",function(){clearTimeout(tmr);tmr=setTimeout(ship,900);});
+    /* 双击公式兜底（三任验收补刀）：KaTeX 把公式拆成碎 span，双击「选词」常常一个字也
+       选不住（04:05 实测三次 dbl 全空选区）——双击落在公式内＝程序化选中整个公式再走
+       既有划记流程；只选 .katex-html 渲染层，避开隐藏的 mathml 层免得文本重复。 */
+    document.addEventListener("dblclick",function(e){
+      try{
+        if(blocked()||BARC)return;
+        var kx=e.target&&e.target.closest&&e.target.closest(".katex");
+        if(!kx)return;
+        var so=window.getSelection();if(!so)return;
+        var rg=document.createRange();
+        rg.selectNodeContents(kx.querySelector(".katex-html")||kx);
+        so.removeAllRanges();so.addRange(rg);
+        clearTimeout(tmr);tmr=setTimeout(ship,300);
+      }catch(_){}
+    });
   }catch(e){}
 })();
 </script>
