@@ -749,6 +749,7 @@ body.gv #gvn{color:var(--gold);border-color:#3a3524}
      零动画、纯内存（body 类，不落盘）；进房默认非纯净态（可发现性）。 */
   body.clean #rtop{display:none}
   body.clean #kysync-btn{display:none}
+  body.clean #rnav{display:none}   /* 桌面纯净态：底部固定导航条一并藏（移动下它本就 none，无副作用） */
 }
 
 /* ————— P16 件一 · 移动首页（≤820px 才现身；桌面 ≥821px 分毫不动）—————
@@ -3427,23 +3428,27 @@ function wireEvents(){
   $("#wbBtn").onclick=openWB;
   $("#pback").onclick=function(){navBack({v:"wall"});};
   $("#mhelp").addEventListener("click",function(e){if(e.target===this)this.classList.add("hide");}); /* tap 外即关，零动画 */
-  /* ————— P16 件六 · 房内 tap 切换纯净态 —————
+  /* ————— P16 件六 · 房内 tap 切换纯净态（2026-08-14 陪读窗放开到全端，学生亲点）—————
      判 tap：位移<10px 且期间未滚动、落点不在排除表内；命中即藏尽/恢复 chrome（零动画、纯内存）。
-     只在纯读判据下生效（桌面鼠标环境照旧）。与误触护闸互不干扰：护闸拦承诺钮的 click，
+     桌面鼠标同样生效；**双击豁免**（350ms 内第二击取消已排程的切换）——双击选词是划记求助
+     流程，不能让 chrome 闪切。与误触护闸互不干扰：护闸拦承诺钮的 click，
      这里只认「空白区的 pointerup」，且排除表已把一切可点件摘出。 */
   (function(){
-    var rm=$("#room"),armed=false,x0=0,y0=0,s0=0;
+    var rm=$("#room"),armed=false,x0=0,y0=0,s0=0,lastUp=0,CTMR=0;
     rm.addEventListener("pointerdown",function(e){
-      armed=(e.button===0||e.button===undefined)&&mqRead()&&!!R&&cleanHit(e.target);
+      armed=(e.button===0||e.button===undefined)&&!!R&&cleanHit(e.target);
       x0=e.clientX;y0=e.clientY;s0=this.scrollTop;
     },true);
     rm.addEventListener("pointerup",function(e){
       if(!armed)return;armed=false;
-      if(!R||!mqRead())return;
-      if(Math.abs(e.clientX-x0)+Math.abs(e.clientY-y0)>=10)return;   /* 拖动/滑动不算 tap */
+      if(!R)return;
+      if(Math.abs(e.clientX-x0)+Math.abs(e.clientY-y0)>=10)return;   /* 拖动/滑动/划选不算 tap */
       if(Math.abs(this.scrollTop-s0)>2)return;                       /* 期间滚过页面：不算 tap */
       if(!cleanHit(e.target))return;
-      cleanToggle();
+      var nw=Date.now();
+      if(nw-lastUp<350){lastUp=nw;clearTimeout(CTMR);return;}        /* 双击第二击：取消切换 */
+      lastUp=nw;
+      clearTimeout(CTMR);CTMR=setTimeout(cleanToggle,360);
     },true);
     rm.addEventListener("pointercancel",function(){armed=false;},true);
   })();
