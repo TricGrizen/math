@@ -4474,7 +4474,7 @@ boot();
   $$(".cells").forEach(mount);   /* boot 期已渲的章簇框补挂（后续 buildWall 各自补挂新簇框） */
 })();
 </script>
-<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @e120c2cab2 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
+<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @a8ae70c442 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
 <script src="sync_cfg.js"></script>
 <script>
 /* ============================================================================
@@ -5721,9 +5721,18 @@ window.KyEvSite = (function () {
     try{
       if(blocked())return;
       if(BARC)return;                                  /* 浮条开着＝正在补话，别抢 */
-      var sel=window.getSelection?String(window.getSelection()):"";
+      var so=window.getSelection?window.getSelection():null;
+      var sel=so?String(so):"";
       sel=sel.replace(/\s+/g," ").trim();
-      if(sel.length<8||sel===last)return;
+      /* 公式选区门槛放宽：选中 KaTeX 内的东西（哪怕两个字符如 ax）也是完整求助——
+         8 字门槛只防正文误选（三任实测：他双击公式试了六分钟递不出来） */
+      var inKx=false;
+      try{
+        var an=so&&so.anchorNode;
+        var el=an&&(an.nodeType===1?an:an.parentElement);
+        inKx=!!(el&&el.closest&&el.closest(".katex"));
+      }catch(e){}
+      if(sel.length<(inKx?2:8)||sel===last)return;
       last=sel;
       var ctx={};
       try{
