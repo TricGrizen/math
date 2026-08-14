@@ -4474,7 +4474,7 @@ boot();
   $$(".cells").forEach(mount);   /* boot 期已渲的章簇框补挂（后续 buildWall 各自补挂新簇框） */
 })();
 </script>
-<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @5ef5018499 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
+<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @91910aca99 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
 <script src="sync_cfg.js"></script>
 <script>
 /* ============================================================================
@@ -5596,6 +5596,12 @@ window.KyEvSite = (function () {
    （开课时面板服务推的）→ sessionStorage 缓存；>20h 视为死链不投。ST/SEEDED 全免。 */
 (function(){
   var last="",tmr=null,LIVE=null,RQ=[],RT=null;
+  /* 壳 body 级 user-select:none（防误选）会把划记闷死——只放开房内正文区，墙面/按钮照旧禁选 */
+  try{
+    var stl=document.createElement("style");
+    stl.textContent="#rin,#rin *{-webkit-user-select:text;user-select:text}";
+    (document.head||document.documentElement).appendChild(stl);
+  }catch(e){}
   function blocked(){try{return !!(ST||SEEDED);}catch(e){return true;}}
   function isRemote(){try{return location.protocol==="https:"&&!/^(127\.|localhost)/.test(location.hostname);}catch(e){return false;}}
   function liveUrl(cb){
