@@ -4505,7 +4505,7 @@ boot();
   $$(".cells").forEach(mount);   /* boot 期已渲的章簇框补挂（后续 buildWall 各自补挂新簇框） */
 })();
 </script>
-<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @7370ab1bcb 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
+<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @fe44e7b1e3 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
 <script src="sync_cfg.js"></script>
 <script>
 /* ============================================================================
@@ -5728,21 +5728,22 @@ window.KyEvSite = (function () {
     try{COARSE=matchMedia&&matchMedia("(pointer:coarse)").matches;}catch(e){}
     function seen(v){try{if(v!==undefined)localStorage.setItem(SEENK,String(v));return +(localStorage.getItem(SEENK)||0);}catch(e){return 0}}
     var BTN=null,DRW=null,LASTT=0,BAN=null;
-    function mkBtn(){
-      if(BTN||!TOPWIN||!COARSE)return;
-      BTN=document.createElement("div");
-      BTN.textContent="陪";
-      BTN.style.cssText="position:fixed;right:10px;bottom:64px;z-index:99997;width:30px;height:30px;"
-        +"border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;"
-        +"color:#3a3a3a;background:rgba(8,8,8,.8);border:1px solid #222;cursor:pointer;"
-        +"font-family:system-ui,'Microsoft YaHei',sans-serif;transition:color .4s,border-color .4s";
-      BTN.addEventListener("click",function(e){e.stopPropagation();DRW?closeDrawer():openDrawer();});
-      try{document.body.appendChild(BTN);}catch(e){}
-    }
+    /* 纯读铁则（8-16 亲令）：平时零占屏——钮只在「有未读」时现身，读完即匿。
+       呼出手势＝右缘向左轻滑（不占一个像素）。 */
     function lit(on){
-      if(!BTN)return;
-      BTN.style.color=on?"#c9b189":"#3a3a3a";
-      BTN.style.borderColor=on?"#6b5232":"#222";
+      if(on){
+        if(BTN||!TOPWIN)return;
+        BTN=document.createElement("div");
+        BTN.textContent="陪";
+        BTN.style.cssText="position:fixed;right:10px;bottom:64px;z-index:99997;width:30px;height:30px;"
+          +"border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;"
+          +"color:#c9b189;background:rgba(8,8,8,.85);border:1px solid #6b5232;cursor:pointer;"
+          +"font-family:system-ui,'Microsoft YaHei',sans-serif";
+        BTN.addEventListener("click",function(e){e.stopPropagation();openDrawer();});
+        try{document.body.appendChild(BTN);}catch(e){}
+      }else{
+        if(BTN){try{BTN.remove();}catch(e){}BTN=null;}
+      }
     }
     function banner(txt){
       if(BAN)return;
@@ -5777,21 +5778,6 @@ window.KyEvSite = (function () {
       });
     }
     function closeDrawer(){if(DRW){try{DRW.remove();}catch(e){}DRW=null;if(LASTT)seen(LASTT);lit(false);}}
-    /* 非触屏顶层页（PC 独立开教材）：保留原小条形态 */
-    var EL=null;
-    function pcNudge(t){
-      if(EL||COARSE)return;
-      EL=document.createElement("div");
-      EL.textContent="陪读 · 有新留言";
-      EL.style.cssText="position:fixed;right:14px;bottom:44px;z-index:99998;font-size:12px;"
-        +"color:#c9b189;background:rgba(10,8,5,.92);border:1px solid #6b5232;border-radius:3px;"
-        +"padding:5px 10px;cursor:pointer;font-family:system-ui,'Microsoft YaHei',sans-serif";
-      EL.addEventListener("click",function(){
-        seen(t);try{EL.remove();}catch(e){}EL=null;
-        try{if(TOPWIN){var u=isRemote()?LIVE:"http://127.0.0.1:8422/";if(u)window.open(u,"_blank");}}catch(e){}
-      });
-      try{document.body.appendChild(EL);}catch(e){}
-    }
     function tick(){
       try{
         if(blocked())return sched();
@@ -5802,13 +5788,11 @@ window.KyEvSite = (function () {
               if(d&&d.t){
                 LASTT=d.t;
                 var unread=d.t>seen(0);
-                if(unread){
+                if(unread&&TOPWIN){
                   var waiting=Date.now()-LASTASK[0]<600000;
-                  if(TOPWIN&&COARSE){
-                    mkBtn();lit(true);
-                    if(waiting&&!DRW)openDrawer();          /* 他在等回答：答案到了直接呈上 */
-                    else if(!DRW)banner("陪读 · 有新留言");
-                  }else pcNudge(d.t);
+                  lit(true);
+                  if(waiting&&!DRW)openDrawer();          /* 他在等回答：答案到了直接呈上 */
+                  else if(!DRW&&COARSE)banner("陪读 · 有新留言");
                 }else lit(false);
               }
               sched();
@@ -5821,7 +5805,21 @@ window.KyEvSite = (function () {
       var fast=Date.now()-LASTASK[0]<600000;
       setTimeout(tick,fast?15000:180000);        /* 等回答窗口 15s，一到答案秒级呈现 */
     }
-    try{mkBtn();setTimeout(tick,8000);}catch(e){}
+    /* 呼出手势：右缘向左轻滑（起点距右缘<26px、横移>44px、纵移<32px）——纯读态零占屏的唤出口 */
+    (function(){
+      if(!TOPWIN||!COARSE)return;
+      var sx=0,sy=0,arm=false;
+      document.addEventListener("touchstart",function(e){
+        var t=e.touches&&e.touches[0];if(!t)return;
+        arm=(window.innerWidth-t.clientX)<26;sx=t.clientX;sy=t.clientY;
+      },{capture:true,passive:true});
+      document.addEventListener("touchend",function(e){
+        if(!arm)return;arm=false;
+        var t=e.changedTouches&&e.changedTouches[0];if(!t)return;
+        if(sx-t.clientX>44&&Math.abs(t.clientY-sy)<32&&!DRW)openDrawer();
+      },{capture:true,passive:true});
+    })();
+    try{setTimeout(tick,8000);}catch(e){}
   })();
 
   /* ②划记 */
