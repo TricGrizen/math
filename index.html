@@ -4505,7 +4505,7 @@ boot();
   $$(".cells").forEach(mount);   /* boot 期已渲的章簇框补挂（后续 buildWall 各自补挂新簇框） */
 })();
 </script>
-<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @f2ff7f7695 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
+<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @7370ab1bcb 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
 <script src="sync_cfg.js"></script>
 <script>
 /* ============================================================================
@@ -5716,48 +5716,112 @@ window.KyEvSite = (function () {
     }
   }catch(e){}
   try{document.addEventListener("visibilitychange",function(){if(document.hidden)rflush();});}catch(e){}
-  /* ③教材页未读提示（8-16：躺姿场景 toast/终端/面板三通道全够不着他——教材页自身当通知面）。
-     每 3 分钟轮询面板 /last（几十字节），有晚于已读戳的新留言→右下角暗金小条；
-     点击＝记已读并（独立页时）打开面板；desk 双拼里（iframe 内）只提示不开页——面板就在旁边。 */
+  /* ③陪读通知面＋手机抽屉（8-16 两轮亲点）。
+     所有端：轮询面板 /last，有新留言→右下角提示。
+     触屏顶层页（手机/iPad 独立开教材）：常驻「陪」微钮（清屏态也在——它是陪读件不是教材
+     chrome，不受 body.clean 管），点一下全屏抽屉内嵌面板；动态轮询——发过划记/提问后
+     10 分钟内每 15 秒（他在等回答！8-16「等 8 分钟离场」事故的根治），此窗口内新留言
+     **自动唤出抽屉**；常态 3 分钟轮询，新留言只亮钮+顶部横幅 3 秒不打断。 */
+  var LASTASK=[0];   /* 最近一次划记/提问发出时刻（ship 成功回调里刷） */
   (function(){
-    var SEENK="ky_tutor_seen",EL=null;
+    var SEENK="ky_tutor_seen",COARSE=false,TOPWIN=(window===window.top);
+    try{COARSE=matchMedia&&matchMedia("(pointer:coarse)").matches;}catch(e){}
     function seen(v){try{if(v!==undefined)localStorage.setItem(SEENK,String(v));return +(localStorage.getItem(SEENK)||0);}catch(e){return 0}}
-    function hide(){if(EL){try{EL.remove();}catch(e){}EL=null;}}
-    function showNudge(t,n){
-      if(EL)return;
+    var BTN=null,DRW=null,LASTT=0,BAN=null;
+    function mkBtn(){
+      if(BTN||!TOPWIN||!COARSE)return;
+      BTN=document.createElement("div");
+      BTN.textContent="陪";
+      BTN.style.cssText="position:fixed;right:10px;bottom:64px;z-index:99997;width:30px;height:30px;"
+        +"border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;"
+        +"color:#3a3a3a;background:rgba(8,8,8,.8);border:1px solid #222;cursor:pointer;"
+        +"font-family:system-ui,'Microsoft YaHei',sans-serif;transition:color .4s,border-color .4s";
+      BTN.addEventListener("click",function(e){e.stopPropagation();DRW?closeDrawer():openDrawer();});
+      try{document.body.appendChild(BTN);}catch(e){}
+    }
+    function lit(on){
+      if(!BTN)return;
+      BTN.style.color=on?"#c9b189":"#3a3a3a";
+      BTN.style.borderColor=on?"#6b5232":"#222";
+    }
+    function banner(txt){
+      if(BAN)return;
+      BAN=document.createElement("div");
+      BAN.textContent=txt;
+      BAN.style.cssText="position:fixed;top:calc(env(safe-area-inset-top,0px) + 6px);left:50%;"
+        +"transform:translateX(-50%);z-index:99998;font-size:12px;color:#c9b189;"
+        +"background:rgba(10,8,5,.94);border:1px solid #6b5232;border-radius:3px;padding:5px 12px;"
+        +"font-family:system-ui,'Microsoft YaHei',sans-serif";
+      try{document.body.appendChild(BAN);}catch(e){}
+      setTimeout(function(){try{BAN.remove();}catch(e){}BAN=null;},3200);
+    }
+    function panelUrl(cb){
+      if(!isRemote())return cb("http://127.0.0.1:8422/");
+      liveUrl(cb);
+    }
+    function openDrawer(){
+      if(DRW)return;
+      panelUrl(function(u){
+        if(DRW)return;
+        DRW=document.createElement("div");
+        DRW.style.cssText="position:fixed;inset:0;z-index:99999;background:#000;display:flex;flex-direction:column";
+        DRW.innerHTML='<div style="flex:none;display:flex;align-items:center;justify-content:space-between;'
+          +'padding:calc(env(safe-area-inset-top,0px) + 8px) 14px 8px;border-bottom:1px solid #141414">'
+          +'<span style="font-size:11px;letter-spacing:.4em;color:#4a4a4a;font-family:system-ui">陪 读</span>'
+          +'<span id="kydrwx" style="color:#666;font-size:18px;padding:2px 10px;cursor:pointer">×</span></div>'
+          +'<iframe src="'+u+'" style="flex:1;border:0;width:100%"></iframe>';
+        document.body.appendChild(DRW);
+        DRW.querySelector("#kydrwx").addEventListener("click",closeDrawer);
+        if(LASTT)seen(LASTT);
+        lit(false);
+      });
+    }
+    function closeDrawer(){if(DRW){try{DRW.remove();}catch(e){}DRW=null;if(LASTT)seen(LASTT);lit(false);}}
+    /* 非触屏顶层页（PC 独立开教材）：保留原小条形态 */
+    var EL=null;
+    function pcNudge(t){
+      if(EL||COARSE)return;
       EL=document.createElement("div");
       EL.textContent="陪读 · 有新留言";
       EL.style.cssText="position:fixed;right:14px;bottom:44px;z-index:99998;font-size:12px;"
         +"color:#c9b189;background:rgba(10,8,5,.92);border:1px solid #6b5232;border-radius:3px;"
         +"padding:5px 10px;cursor:pointer;font-family:system-ui,'Microsoft YaHei',sans-serif";
       EL.addEventListener("click",function(){
-        seen(t);hide();
-        try{
-          if(window===window.top){
-            var u=isRemote()?LIVE:"http://127.0.0.1:8422/";
-            if(u)window.open(u,"_blank");
-          }
-        }catch(e){}
+        seen(t);try{EL.remove();}catch(e){}EL=null;
+        try{if(TOPWIN){var u=isRemote()?LIVE:"http://127.0.0.1:8422/";if(u)window.open(u,"_blank");}}catch(e){}
       });
       try{document.body.appendChild(EL);}catch(e){}
     }
-    function check(){
+    function tick(){
       try{
-        if(blocked())return;
+        if(blocked())return sched();
         var go=function(base){
           fetch(base.replace(/\/$/,"")+"/last",{cache:"no-store"})
             .then(function(r){return r.ok?r.json():null})
             .then(function(d){
-              if(!d||!d.t)return;
-              if(d.t>seen(0))showNudge(d.t,d.n);
-              else hide();
-            }).catch(function(){});
+              if(d&&d.t){
+                LASTT=d.t;
+                var unread=d.t>seen(0);
+                if(unread){
+                  var waiting=Date.now()-LASTASK[0]<600000;
+                  if(TOPWIN&&COARSE){
+                    mkBtn();lit(true);
+                    if(waiting&&!DRW)openDrawer();          /* 他在等回答：答案到了直接呈上 */
+                    else if(!DRW)banner("陪读 · 有新留言");
+                  }else pcNudge(d.t);
+                }else lit(false);
+              }
+              sched();
+            }).catch(function(){sched();});
         };
-        if(isRemote())liveUrl(go);
-        else go("http://127.0.0.1:8422");
-      }catch(e){}
+        if(isRemote())liveUrl(go);else go("http://127.0.0.1:8422");
+      }catch(e){sched();}
     }
-    try{setInterval(check,180000);setTimeout(check,15000);}catch(e){}
+    function sched(){
+      var fast=Date.now()-LASTASK[0]<600000;
+      setTimeout(tick,fast?15000:180000);        /* 等回答窗口 15s，一到答案秒级呈现 */
+    }
+    try{mkBtn();setTimeout(tick,8000);}catch(e){}
   })();
 
   /* ②划记 */
@@ -5775,42 +5839,83 @@ window.KyEvSite = (function () {
   }
   /* 划记浮条：圈住 ≠ 说清问题——就地弹一条可补话的小条（学生 2026-08-14 亲点）。
      空着回车＝纯圈发（原行为）；打了字回车＝圈＋问题一起递；Esc/点外＝取消。 */
-  var BARC=null;
+  var BARC=null,BAR_COARSE=false;
+  try{BAR_COARSE=matchMedia&&matchMedia("(pointer:coarse)").matches;}catch(e){}
   function killBar(){if(BARC){try{BARC.remove();}catch(e){}BARC=null;}}
+  function sendMark(sel,ctx,note){
+    var pl={text:sel.slice(0,600),kind:"mark",ctx:ctx};
+    if(note)pl.note=note.slice(0,500);
+    killBar();
+    post("/ask",JSON.stringify(pl),function(){LASTASK[0]=Date.now();flash();});
+  }
   function showBar(sel,ctx){
     killBar();
-    var rc=null;
-    try{var rg=window.getSelection().getRangeAt(0);rc=rg.getBoundingClientRect();}catch(e){}
-    var top=rc?Math.min(window.innerHeight-64,rc.bottom+8):window.innerHeight-72;
-    var lf=rc?Math.max(8,Math.min(window.innerWidth-330,rc.left)):14;
     var el=document.createElement("div");
-    el.style.cssText="position:fixed;left:"+lf+"px;top:"+top+"px;z-index:99999;background:rgba(5,5,5,.96);"
-      +"border:1px solid #6b5232;border-radius:3px;padding:7px 9px;width:320px;box-sizing:border-box;"
-      +"font-size:12px;color:#8a8a8a;font-family:system-ui,'Microsoft YaHei',sans-serif";
-    el.innerHTML='<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#5c5c5c;margin-bottom:5px">'
-      +'圈：<span style="color:#c9b189">'+sel.slice(0,22).replace(/</g,"&lt;")+(sel.length>22?"…":"")+'</span></div>'
-      +'<input style="width:100%;box-sizing:border-box;background:transparent;border:0;border-bottom:1px solid #2a2a2a;'
-      +'outline:0;color:#ccc;font-size:12.5px;padding:2px 0" placeholder="补一句问题（可空）——回车递给助教，Esc 取消">';
-    document.body.appendChild(el);BARC=el;
-    var inp=el.querySelector("input");
-    setTimeout(function(){try{inp.focus();}catch(e){}},50);
-    inp.addEventListener("keydown",function(ev){
-      ev.stopPropagation();
-      if(ev.key==="Escape"){killBar();return;}
-      if(ev.key!=="Enter")return;
-      var note=inp.value.trim();
-      var pl={text:sel.slice(0,600),kind:"mark",ctx:ctx};
-      if(note)pl.note=note.slice(0,500);
-      killBar();
-      post("/ask",JSON.stringify(pl),flash);
-    });
-    el.addEventListener("mousedown",function(ev){ev.stopPropagation();});
-    setTimeout(function(){
-      document.addEventListener("mousedown",function h(ev){
-        if(BARC&&!BARC.contains(ev.target)){killBar();}
-        document.removeEventListener("mousedown",h);
+    if(BAR_COARSE){
+      /* 手机版（8-16 亲点「做得不好」重做）：顶部全宽、两枚大点按——「直接递」零打字，
+         「补一句」才展开输入框；顶部布局天然避开 iOS 软键盘顶起的老坑。 */
+      el.style.cssText="position:fixed;left:8px;right:8px;top:calc(env(safe-area-inset-top,0px) + 6px);"
+        +"z-index:99999;background:rgba(5,5,5,.97);border:1px solid #6b5232;border-radius:4px;"
+        +"padding:9px 11px;font-size:13px;color:#8a8a8a;font-family:system-ui,'Microsoft YaHei',sans-serif";
+      el.innerHTML='<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#5c5c5c;margin-bottom:8px">'
+        +'圈：<span style="color:#c9b189">'+sel.slice(0,26).replace(/</g,"&lt;")+(sel.length>26?"…":"")+'</span></div>'
+        +'<div id="kymkbtns" style="display:flex;gap:8px">'
+        +'<div data-mk="go" style="flex:1;text-align:center;padding:9px 0;border:1px solid #6b5232;'
+        +'border-radius:3px;color:#c9b189">直接递</div>'
+        +'<div data-mk="note" style="flex:1;text-align:center;padding:9px 0;border:1px solid #2a2a2a;'
+        +'border-radius:3px;color:#888">补一句</div>'
+        +'<div data-mk="x" style="flex:none;padding:9px 12px;color:#555">×</div></div>'
+        +'<div id="kymkin" style="display:none;margin-top:8px">'
+        +'<input style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #2a2a2a;'
+        +'border-radius:3px;outline:0;color:#ccc;font-size:14px;padding:8px" placeholder="问题——回车递给助教"></div>';
+      document.body.appendChild(el);BARC=el;
+      el.addEventListener("click",function(ev){
+        ev.stopPropagation();
+        var mk=ev.target.getAttribute&&ev.target.getAttribute("data-mk");
+        if(mk==="go")sendMark(sel,ctx,"");
+        else if(mk==="x")killBar();
+        else if(mk==="note"){
+          el.querySelector("#kymkbtns").style.display="none";
+          var w=el.querySelector("#kymkin");w.style.display="block";
+          var inp=w.querySelector("input");
+          setTimeout(function(){try{inp.focus();}catch(e){}},60);
+          inp.addEventListener("keydown",function(kv){
+            kv.stopPropagation();
+            if(kv.key==="Enter")sendMark(sel,ctx,inp.value.trim());
+            if(kv.key==="Escape")killBar();
+          });
+        }
       });
-    },100);
+      el.addEventListener("touchstart",function(ev){ev.stopPropagation();},true);
+    }else{
+      var rc=null;
+      try{var rg=window.getSelection().getRangeAt(0);rc=rg.getBoundingClientRect();}catch(e){}
+      var top=rc?Math.min(window.innerHeight-64,rc.bottom+8):window.innerHeight-72;
+      var lf=rc?Math.max(8,Math.min(window.innerWidth-330,rc.left)):14;
+      el.style.cssText="position:fixed;left:"+lf+"px;top:"+top+"px;z-index:99999;background:rgba(5,5,5,.96);"
+        +"border:1px solid #6b5232;border-radius:3px;padding:7px 9px;width:320px;box-sizing:border-box;"
+        +"font-size:12px;color:#8a8a8a;font-family:system-ui,'Microsoft YaHei',sans-serif";
+      el.innerHTML='<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#5c5c5c;margin-bottom:5px">'
+        +'圈：<span style="color:#c9b189">'+sel.slice(0,22).replace(/</g,"&lt;")+(sel.length>22?"…":"")+'</span></div>'
+        +'<input style="width:100%;box-sizing:border-box;background:transparent;border:0;border-bottom:1px solid #2a2a2a;'
+        +'outline:0;color:#ccc;font-size:12.5px;padding:2px 0" placeholder="补一句问题（可空）——回车递给助教，Esc 取消">';
+      document.body.appendChild(el);BARC=el;
+      var inp=el.querySelector("input");
+      setTimeout(function(){try{inp.focus();}catch(e){}},50);
+      inp.addEventListener("keydown",function(ev){
+        ev.stopPropagation();
+        if(ev.key==="Escape"){killBar();return;}
+        if(ev.key!=="Enter")return;
+        sendMark(sel,ctx,inp.value.trim());
+      });
+      el.addEventListener("mousedown",function(ev){ev.stopPropagation();});
+      setTimeout(function(){
+        document.addEventListener("mousedown",function h(ev){
+          if(BARC&&!BARC.contains(ev.target)){killBar();}
+          document.removeEventListener("mousedown",h);
+        });
+      },100);
+    }
   }
   function ship(){
     try{
@@ -5827,7 +5932,7 @@ window.KyEvSite = (function () {
         var el=an&&(an.nodeType===1?an:an.parentElement);
         inKx=!!(el&&el.closest&&el.closest(".katex"));
       }catch(e){}
-      if(sel.length<(inKx?2:8)||sel===last)return;
+      if(sel.length<(inKx?2:(BAR_COARSE?4:8))||sel===last)return;   /* 触屏正文 4 字：手机选中费劲，选着多少算多少 */
       last=sel;
       var ctx={};
       try{
