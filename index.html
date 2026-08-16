@@ -1561,6 +1561,17 @@ function canSeal(){
    承诺态，绝不预揭绝不跳过；已过拍可自由回跳，向前照旧守 canAdvance。
    豁免：selftest/SEEDED/MEMONLY 一律不写（与云档同步适配器 blocked() 同口径）；?reset 在 boot 即跳转。 */
 var POSDEB=0;
+/* 交互戳（2026-08-14 陪读窗 P1 正案·用户点单「从根源避免双端冲突」）：
+   挂着没人的页面（僵尸窗）会把自己视口所在的旧位置带新 ts 写回 pos、经云档合并盖掉
+   另一台设备的真实进度（8-13 实证：PC 挂窗把手机的 a=11 盖回 a=5）。守卫＝最近 5 分钟
+   有真实交互（点击/滚轮/按键/触摸）的页面才有资格写 pos；纸上演算期间无交互也无滚动，
+   位置本就没变，零误伤。 */
+var UACT=Date.now();
+try{
+  ["pointerdown","keydown","wheel","touchstart"].forEach(function(ev){
+    document.addEventListener(ev,function(){UACT=Date.now();},{capture:true,passive:true});
+  });
+}catch(e){}
 function noWrite(){try{return !!(ST||SEEDED||window.__MEMONLY);}catch(e){return true;}}
 function posClamp(l,pos){ /* 越界自愈：p 超拍数钳到末拍、负值归零；坏件返 null */
   if(!pos||typeof pos!=="object"||Array.isArray(pos)||typeof pos.p!=="number")return null;
@@ -1588,6 +1599,7 @@ function curAnchor(){
 }
 function posSave(){ /* 拍切换即写＋锚变防抖 3s＋离页即写；同值不写盘（省云档抖动） */
   if(!R||noWrite()||R.mode==="review")return;
+  if(Date.now()-UACT>300000)return;   /* 僵尸窗守卫：5 分钟无真实交互＝无人页面，无资格写位置 */
   var id=R.level.id,np={p:R.pi|0,a:curAnchor()|0,ts:now()};
   if(!S.cases[id]&&!np.p&&!np.a)return;   /* 未学关停在第一拍开头＝无信息量，不为它新建 case */
   var c=ensureCase(id),op=c.pos;
@@ -4485,7 +4497,7 @@ boot();
   $$(".cells").forEach(mount);   /* boot 期已渲的章簇框补挂（后续 buildWall 各自补挂新簇框） */
 })();
 </script>
-<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @8380bbc51d 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
+<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @168b58c1a4 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
 <script src="sync_cfg.js"></script>
 <script>
 /* ============================================================================
@@ -5594,6 +5606,25 @@ window.KyEvSite = (function () {
 (function(){
   if(!window.KyEvSite)return;
   try{KyEvSite.init({app:"数学",blocked:function(){try{return !!(ST||SEEDED);}catch(e){return true;}}});}catch(e){}
+})();
+
+/* ---- 双端接力·快拉（2026-08-14 学生点单「坐/躺切设备无缝衔接」）----
+   静默超 2 分钟后的第一次真实交互＝多半刚从另一台设备切回来——立即静默同步
+   （KySync.syncNow 拉云合并上屏，AU 的 applied 温和重渲已接），把「切设备要等
+   10 分钟轮询」压到秒级。配合壳内僵尸窗守卫（无人页面不写 pos），旧端不再盖新端，
+   合并冲突从根源消失。 */
+(function(){
+  if(!window.KySync||!KySync.syncNow)return;
+  var lastAct=Date.now();
+  function poke(){
+    var n=Date.now(),gap=n-lastAct;
+    lastAct=n;
+    if(gap>120000){try{KySync.syncNow(false);}catch(e){}}
+  }
+  try{
+    document.addEventListener("pointerdown",poke,true);
+    document.addEventListener("keydown",poke,true);
+  }catch(e){}
 })();
 
 /* ---- 远程等效层＋划记递问（陪读体系·2026-08-13 学生亲令「上公网绝不降级助教」）----
