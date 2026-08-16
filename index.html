@@ -4505,7 +4505,7 @@ boot();
   $$(".cells").forEach(mount);   /* boot 期已渲的章簇框补挂（后续 buildWall 各自补挂新簇框） */
 })();
 </script>
-<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @bcbe82ed7c 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
+<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @f2ff7f7695 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
 <script src="sync_cfg.js"></script>
 <script>
 /* ============================================================================
@@ -5716,6 +5716,50 @@ window.KyEvSite = (function () {
     }
   }catch(e){}
   try{document.addEventListener("visibilitychange",function(){if(document.hidden)rflush();});}catch(e){}
+  /* ③教材页未读提示（8-16：躺姿场景 toast/终端/面板三通道全够不着他——教材页自身当通知面）。
+     每 3 分钟轮询面板 /last（几十字节），有晚于已读戳的新留言→右下角暗金小条；
+     点击＝记已读并（独立页时）打开面板；desk 双拼里（iframe 内）只提示不开页——面板就在旁边。 */
+  (function(){
+    var SEENK="ky_tutor_seen",EL=null;
+    function seen(v){try{if(v!==undefined)localStorage.setItem(SEENK,String(v));return +(localStorage.getItem(SEENK)||0);}catch(e){return 0}}
+    function hide(){if(EL){try{EL.remove();}catch(e){}EL=null;}}
+    function showNudge(t,n){
+      if(EL)return;
+      EL=document.createElement("div");
+      EL.textContent="陪读 · 有新留言";
+      EL.style.cssText="position:fixed;right:14px;bottom:44px;z-index:99998;font-size:12px;"
+        +"color:#c9b189;background:rgba(10,8,5,.92);border:1px solid #6b5232;border-radius:3px;"
+        +"padding:5px 10px;cursor:pointer;font-family:system-ui,'Microsoft YaHei',sans-serif";
+      EL.addEventListener("click",function(){
+        seen(t);hide();
+        try{
+          if(window===window.top){
+            var u=isRemote()?LIVE:"http://127.0.0.1:8422/";
+            if(u)window.open(u,"_blank");
+          }
+        }catch(e){}
+      });
+      try{document.body.appendChild(EL);}catch(e){}
+    }
+    function check(){
+      try{
+        if(blocked())return;
+        var go=function(base){
+          fetch(base.replace(/\/$/,"")+"/last",{cache:"no-store"})
+            .then(function(r){return r.ok?r.json():null})
+            .then(function(d){
+              if(!d||!d.t)return;
+              if(d.t>seen(0))showNudge(d.t,d.n);
+              else hide();
+            }).catch(function(){});
+        };
+        if(isRemote())liveUrl(go);
+        else go("http://127.0.0.1:8422");
+      }catch(e){}
+    }
+    try{setInterval(check,180000);setTimeout(check,15000);}catch(e){}
+  })();
+
   /* ②划记 */
   function flash(){
     try{
