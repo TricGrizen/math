@@ -1010,7 +1010,7 @@ var S,WB;
    故落盘合法（投影律管的是进度色/到期态那类可重算的东西）。云档 mMath 逐 case 整对象取新、
    meta 整体按 last 取新 ⇒ 两者免费搭车，sync_core.js 公共正本零改动。 */
 function freshState(){return {cases:{},meta:{examDate:"",snd:true,last:0,ver:1,lastk:null}};}
-function ensureCase(id){var c=S.cases[id];if(!c){c={due:0,hits:[],seen:0,g:0,star:false,mc:{},dr:{},pos:null};S.cases[id]=c;}if(!c.mc||typeof c.mc!=="object")c.mc={};if(!c.dr||typeof c.dr!=="object")c.dr={};if(c.pos===undefined)c.pos=null;return c;}
+function ensureCase(id){var c=S.cases[id];if(!c){c={due:0,hits:[],seen:0,g:0,star:false,mc:{},rmc:{},dr:{},pos:null};S.cases[id]=c;}if(!c.mc||typeof c.mc!=="object")c.mc={};if(!c.rmc||typeof c.rmc!=="object")c.rmc={};if(!c.dr||typeof c.dr!=="object")c.dr={};if(c.pos===undefined)c.pos=null;return c;}
 function loadState(){
   var f=freshState();
   try{S=JSON.parse(localStorage.getItem(SAVE));}catch(e){S=null;}
@@ -1531,7 +1531,7 @@ function mcKeys(l){ /* 节内测题全集：q=节后微测；q2=拆墙实验（�
 function mcQof(l,k){var d=((l.teach&&l.teach.detail)||[])[parseInt(k,10)];if(!d)return null;return /b$/.test(k)?d.q2:d.q;}
 function mcAnswered(l,k){
   if(R&&R.committed["mc"+k]!==undefined)return true;
-  var c=S.cases[l.id];return !!(c&&c.mc&&c.mc[k]);
+  var c=S.cases[l.id];return !!(c&&(c.mc&&c.mc[k]||c.rmc&&c.rmc[k]));  /* rmc=回看战绩（P3 陪读窗正案） */
 }
 function teachDone(l){
   var ok=mcKeys(l).every(function(e){return mcAnswered(l,e.k);});
@@ -2317,7 +2317,7 @@ function renderContrast(c){
   return h+"</tbody></table></div>";
 }
 function renderMc(l,k,q){ /* 节后微测/拆墙实验：先选后揭（第一法），答错无罚但入档定位 */
-  var c=S.cases[l.id],past=c&&c.mc&&c.mc[k];
+  var c=S.cases[l.id],past=c&&(c.mc&&c.mc[k]||c.rmc&&c.rmc[k]);
   var picked=(R&&R.committed["mc"+k]!==undefined)?R.committed["mc"+k]:(past?past.p:undefined);
   var done=picked!==undefined;
   var lab=q.t==="拆墙"?"拆墙实验 · 删掉一个条件，哪个反例闯进来（答错无罚）":"微测 · 只考这一节（答错无罚，先选后看）";
@@ -2337,10 +2337,12 @@ function commitMc(k,oi){
   var l=R.level,q=mcQof(l,k);
   if(!q||R.committed["mc"+k]!==undefined)return;
   var c=ensureCase(l.id);
-  if(c.mc[k])return; /* 跨会话已答：不重判（复习态走 rmc 另计） */
+  if(c.mc[k]||c.rmc[k])return; /* 跨会话已答（含回看战绩）：不重判——治「同一题写十几遍仍提醒」 */
   R.committed["mc"+k]=oi;
   var ok=oi===q.ans;
-  if(!R.browse)c.mc[k]={ok:ok,p:oi,t:now()};   /* 回看态只在内存里判给自己看，不改档（P16 件三 4） */
+  if(!R.browse)c.mc[k]={ok:ok,p:oi,t:now()};
+  else c.rmc[k]={ok:ok,p:oi,t:now()};   /* 回看战绩层（P3 陪读窗正案）：落档但不入调度/收墙/晋阶——
+                                           只用于「答过就别再问」「跟算闸跨会话可过」「学习不再隐形」 */
   rec(l.id,q.t==="拆墙"?"拆墙":"微测",ok,0);
   var el=$("#mc"+k);
   if(el){var tmp=document.createElement("div");tmp.innerHTML=renderMc(l,k,q);
@@ -3955,9 +3957,15 @@ function selftest(){
         R={level:probe,kind:"概念",phases:["teach"],pi:0,committed:{},revealed:{},mode:"learn",browse:true};
         var before=JSON.stringify(S.cases[pid]);
         rec(pid,"微测",true,0);commitMc("0",1);seal();
-        if(JSON.stringify(S.cases[pid])!==before)msg="回看态改了档:"+JSON.stringify(S.cases[pid]);
+        /* P3 正案（2026-08-16）：回看态微测落 rmc（回看战绩层）——调度域（due/g/seen/mc/dr/star/hits）
+           仍必须一字不动；断言从「全档不变」升级为「除 rmc 外不变 + rmc 必须真落」 */
+        var after=S.cases[pid],aC=JSON.parse(JSON.stringify(after));delete aC.rmc;
+        var bC=JSON.parse(before);delete bC.rmc;
+        if(JSON.stringify(aC)!==JSON.stringify(bC))msg="回看态动了调度域:"+JSON.stringify(after);
+        if(!msg&&!(after.rmc&&after.rmc["0"]))msg="回看战绩未落档（rmc 空——P3 正案未生效）";
         if(!msg&&R.committed.mc0!==1)msg="回看态微测未在内存判给自己看";
         if(!msg){                                    /* 负控：browse 关掉后同样三下必须真的动档 */
+          S.cases[pid].rmc={};                       /* 清正控留下的回看战绩——rmc 已答会挡非回看写入（去重语义正确，测试内复用需清场） */
           R={level:probe,kind:"概念",phases:["teach"],pi:0,committed:{},revealed:{},mode:"learn",browse:false};
           rec(pid,"微测",true,0);commitMc("0",1);
           var c9=S.cases[pid];
@@ -4497,7 +4505,7 @@ boot();
   $$(".cells").forEach(mount);   /* boot 期已渲的章簇框补挂（后续 buildWall 各自补挂新簇框） */
 })();
 </script>
-<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @168b58c1a4 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
+<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @bcbe82ed7c 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
 <script src="sync_cfg.js"></script>
 <script>
 /* ============================================================================
@@ -4672,6 +4680,7 @@ function mMath(l,r){
     c.star=!!(w.star);
     c.hits=mArr(a.hits,b.hits,120);       /* 战绩流水并集（去重定序），封顶护信封（并集后必须 cap，防 1MB 界） */
     c.mc=mTMap(a.mc,b.mc,false);          /* 微测：复习覆盖语义＝取新 */
+    c.rmc=mTMap(a.rmc,b.rmc,false);       /* 回看战绩（P3）：同律取新——双端重学互认，切设备不清零 */
     c.dr=mTMap(a.dr,b.dr,true);           /* 真题：一击定案做过不重判＝取早 */
     c.pos=mPos(a.pos,b.pos);
     o.cases[id]=c;

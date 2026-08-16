@@ -14,12 +14,13 @@
   body{color:#b0b0b0;font:13px/1.7 system-ui,-apple-system,"Microsoft YaHei",sans-serif;
        padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
   .wrap{display:flex;height:100%}
-  iframe{border:0;height:100%;display:block}
+  iframe{border:0;height:100%;display:block;transform:translateZ(0);-webkit-overflow-scrolling:touch}
   #m{flex:1;min-width:0}
   #b{width:340px}
-  #bar{width:9px;cursor:col-resize;background:#0a0a0a;position:relative;flex:none;transition:background .3s}
-  @media(pointer:coarse){#bar{width:20px}}
-  #bar:hover,#bar.on{background:#1c1c1c}
+  /* 拖条：视觉 4px 细线；触摸热区经伪元素扩 22px（8-16 亲点「线太厚」——视觉与热区分家） */
+  #bar{width:4px;cursor:col-resize;background:#111;position:relative;flex:none;transition:background .3s}
+  #bar::before{content:"";position:absolute;left:-9px;right:-9px;top:0;bottom:0}
+  #bar:hover,#bar.on{background:#2a2a2a}
   #fzh{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);cursor:pointer;
        color:#4a4a4a;font:12px/1 system-ui;padding:16px 4px;writing-mode:vertical-rl;
        letter-spacing:3px;user-select:none;-webkit-user-select:none}
@@ -128,7 +129,7 @@ setInterval(function(){                        /* 隧道换代自动重寻：两
 /* 拖条（触摸/鼠标通用；「字」手柄与卡片走 click，裸条才拖） */
 var drag=false;
 BAR.addEventListener("pointerdown",function(e){
-  if(e.target!==BAR)return;
+  if(e.target.id==="fzh"||e.target.closest&&e.target.closest("#fzcard"))return;  /* 手柄/卡片走 click；裸条（含伪元素热区）才拖 */
   drag=true;BAR.classList.add("on");BAR.setPointerCapture(e.pointerId);
   M.style.pointerEvents=B.style.pointerEvents="none";e.preventDefault();
 });
