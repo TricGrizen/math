@@ -4505,7 +4505,7 @@ boot();
   $$(".cells").forEach(mount);   /* boot 期已渲的章簇框补挂（后续 buildWall 各自补挂新簇框） */
 })();
 </script>
-<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @fe44e7b1e3 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
+<!--KY-SYNC-BEGIN core+evlog+evsite+adapter_math.js @b43b6cd773 由 tools/app/inject_shells.py 注入；正本在 tools/app/，改正本后重跑注入器再跑 build 管线-->
 <script src="sync_cfg.js"></script>
 <script>
 /* ============================================================================
@@ -5650,7 +5650,10 @@ window.KyEvSite = (function () {
   /* 壳 body 级 user-select:none（防误选）会把划记闷死——只放开房内正文区，墙面/按钮照旧禁选 */
   try{
     var stl=document.createElement("style");
-    stl.textContent="#rin,#rin *{-webkit-user-select:text;user-select:text}";
+    stl.textContent="#rin,#rin *{-webkit-user-select:text;user-select:text}"
+      /* KaTeX 隐藏 MathML 层踢出选区：拖选横跨行内公式时它会被卷进来——选区诡异断裂
+         +文本双份乱码（8-16/8-17 两批「十几下才圈中一次」的病根，流水在案） */
+      +".katex .katex-mathml{-webkit-user-select:none;user-select:none}";
     (document.head||document.documentElement).appendChild(stl);
   }catch(e){}
   function blocked(){try{return !!(ST||SEEDED);}catch(e){return true;}}
@@ -5839,11 +5842,14 @@ window.KyEvSite = (function () {
      空着回车＝纯圈发（原行为）；打了字回车＝圈＋问题一起递；Esc/点外＝取消。 */
   var BARC=null,BAR_COARSE=false;
   try{BAR_COARSE=matchMedia&&matchMedia("(pointer:coarse)").matches;}catch(e){}
-  function killBar(){if(BARC){try{BARC.remove();}catch(e){}BARC=null;}}
+  /* killBar 顺手清 last：旧版条被关（×/Esc/外点）后 last 仍记着这句，同句再怎么拖选
+     ship 都被 sel===last 拦死＝「反复拖选全落空」的另一半病根。递送成功例外（sendMark 回填）。 */
+  function killBar(){if(BARC){try{BARC.remove();}catch(e){}BARC=null;}last="";}
   function sendMark(sel,ctx,note){
     var pl={text:sel.slice(0,600),kind:"mark",ctx:ctx};
     if(note)pl.note=note.slice(0,500);
     killBar();
+    last=sel;                                  /* 递过的句子记回 last，防选区残留反复弹条 */
     post("/ask",JSON.stringify(pl),function(){LASTASK[0]=Date.now();flash();});
   }
   function showBar(sel,ctx){
@@ -5915,12 +5921,51 @@ window.KyEvSite = (function () {
       },100);
     }
   }
+  /* 选区→干净文本：①选区整个落在单只公式内＝直接递该式 LaTeX 源码；②跨式选区把
+     KaTeX 隐藏 MathML 层剔掉（双份乱码源头），整只公式换回 $源码$（inbox 可读可还原，
+     治「3 tanx−x∼ 3 x 3 ​」式碎渲染）；任何一步不对劲退回原始 String(so)，宁糙勿丢。 */
+  function selText(so){
+    var raw="";
+    try{raw=String(so);}catch(e){}
+    try{
+      if(!so.rangeCount)return raw;
+      var rg=so.getRangeAt(0);
+      var sc=rg.startContainer,host=sc&&(sc.nodeType===1?sc:sc.parentElement);
+      var one=host&&host.closest?host.closest(".katex"):null;
+      if(one){
+        var an1=one.querySelector(".katex-mathml annotation");
+        if(an1)return "$"+an1.textContent.replace(/\s+/g," ").trim()+"$";
+      }
+      var frag=rg.cloneContents();
+      if(!frag.querySelectorAll)return raw;
+      var srcs=[],all=document.querySelectorAll(".katex"),i;
+      for(i=0;i<all.length;i++){
+        try{
+          if(rg.intersectsNode(all[i])){
+            var an=all[i].querySelector(".katex-mathml annotation");
+            srcs.push(an?an.textContent:null);
+          }
+        }catch(e){}
+      }
+      var mm=frag.querySelectorAll(".katex-mathml"),j;
+      for(j=mm.length-1;j>=0;j--){try{mm[j].parentNode.removeChild(mm[j]);}catch(e){}}
+      var kf=frag.querySelectorAll(".katex");
+      if(kf.length&&kf.length===srcs.length){       /* 数量守恒才换源，擦边多算就只剔层退化 */
+        for(i=0;i<kf.length;i++){
+          var t=srcs[i]?("$"+srcs[i].replace(/\s+/g," ").trim()+"$"):(kf[i].textContent||"");
+          try{kf[i].parentNode.replaceChild(document.createTextNode(" "+t+" "),kf[i]);}catch(e){}
+        }
+      }
+      var out=(frag.textContent||"").replace(/​/g,"");   /* 斜杠间是字面 U+200B 零宽空格（KaTeX 渲染层遗留）——看着空不是空，勿删 */
+      return out.replace(/\s+/g," ").trim()?out:raw;
+    }catch(e){return raw;}
+  }
   function ship(){
     try{
       if(blocked())return;
       if(BARC)return;                                  /* 浮条开着＝正在补话，别抢 */
       var so=window.getSelection?window.getSelection():null;
-      var sel=so?String(so):"";
+      var sel=so?selText(so):"";
       sel=sel.replace(/\s+/g," ").trim();
       /* 公式选区门槛放宽：选中 KaTeX 内的东西（哪怕两个字符如 ax）也是完整求助——
          8 字门槛只防正文误选（三任实测：他双击公式试了六分钟递不出来） */
@@ -5960,6 +6005,7 @@ window.KyEvSite = (function () {
       }catch(_){}
     });
   }catch(e){}
+  try{window.__KYMK={selText:selText};}catch(e){}   /* 无头/CDP 验证句柄，不入任何业务路径 */
 })();
 </script>
 <!--KY-SYNC-END-->
